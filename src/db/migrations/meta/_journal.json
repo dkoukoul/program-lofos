@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1783698614435,
+      "tag": "0000_warm_joshua_kane",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1783705568043,
+      "tag": "0001_cultured_zemo",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1783706096695,
+      "tag": "0002_jittery_obadiah_stane",
+      "breakpoints": true
+    }
+  ]
+}

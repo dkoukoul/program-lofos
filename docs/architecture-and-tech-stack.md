@@ -36,8 +36,8 @@
 | Runtime | **Bun** | Όπως ζητήθηκε — γρήγορο, ενσωματωμένο TS, ενσωματωμένο SQLite driver. |
 | Γλώσσα | **TypeScript** | Type safety σε όλο το stack, βοηθάει πολύ έναν LLM agent να μη σπάει πράγματα ακούσια. |
 | Web framework | **Hono** | Ελαφρύ, τρέχει native πάνω σε Bun, υποστηρίζει JSX για SSR + JSON routes στο ίδιο app. Πολύ διαδεδομένο, άρα καλά τεκμηριωμένο για coding agents. |
-| Frontend rendering | **Server-rendered JSX (Hono/JSX)** + **htmx** για interactivity χωρίς reload (π.χ. προσθήκη δράσης, dynamic πεδία, ανανέωση καρτών προγράμματος) | Καμία ξεχωριστή SPA, κανένα build step, ένα deployment artifact. |
-| CSS | Απλό, χειρόγραφο CSS με **CSS custom properties** για το theming (χρώματα/λογότυπο ανά τμήμα/περίοδο) | Χωρίς Tailwind build pipeline προς το παρόν — μπορεί να προστεθεί Φάση 2 αν χρειαστεί. |
+| Frontend rendering | **Server-rendered JSX (Hono/JSX)** + **htmx** για interactivity χωρίς reload (π.χ. wizard βήματα δημιουργίας δράσης, dynamic πεδία, ανανέωση καρτών προγράμματος) | Καμία ξεχωριστή SPA, κανένα build step, ένα deployment artifact. |
+| CSS | Απλό, χειρόγραφο CSS με **CSS custom properties** για το theming (χρώματα/λογότυπο ανά τμήμα/περίοδο, δες §8) | Χωρίς Tailwind build pipeline προς το παρόν — μπορεί να προστεθεί Φάση 2 αν χρειαστεί. |
 | Βάση δεδομένων | **SQLite** αρχείο, μέσω `bun:sqlite` (native driver) | Όπως ζητήθηκε. Μηδενικό διαχειριστικό βάρος, ένα αρχείο, εύκολο backup. |
 | ORM / query layer | **Drizzle ORM** (drizzle-orm + drizzle-kit) πάνω από bun:sqlite | Type-safe queries, schema-as-code, αυτόματα migrations. Αποφεύγει raw SQL string concatenation (SQL injection risk) χωρίς να προσθέτει βαριά αφαίρεση. |
 | Validation | **Zod** | Validation σε forms/API στο ίδιο σημείο που ορίζονται και οι τύποι. |
@@ -64,7 +64,10 @@ program-lofos/
 │   │   └── ical.ts          # .ics endpoints
 │   ├── views/                # JSX components (SSR)
 │   │   ├── public/
+│   │   │   ├── layout.tsx    # κοινό shared layout/data contract
+│   │   │   └── templates/    # section-specific variants: agele.tsx, omada.tsx, koinotita.tsx
 │   │   └── admin/
+│   │       └── wizard/       # βηματικά JSX components δημιουργίας/επεξεργασίας δράσης
 │   ├── emails/                # email templates (magic link, ειδοποιήσεις)
 │   ├── lib/
 │   │   ├── auth.ts            # session/cookie helpers, middleware
@@ -84,8 +87,8 @@ program-lofos/
 - `leaders` (βαθμοφόροι/επιτελείο): id, όνομα, email, role (`section_leader` | `system_staff`), section_id (null αν system_staff)
 - `magic_links`: id, leader_id, token_hash, expires_at, used_at
 - `sessions`: id, leader_id, token_hash, expires_at, created_at, user_agent (για revocation)
-- `programs` (περίοδοι προγράμματος): id, section_id (null αν είναι Σύστημα-wide πρόγραμμα-container — βλ. σημείωση), period_start, period_end, status (`draft`|`published`), theme overrides (χρώμα/εικόνες), published_at
-- `activities` (δράσεις): id, program_id, section_id (ή flag `is_system_wide`), type, location, starts_at, ends_at, cost, what_to_bring, created/updated timestamps, `changed_after_publish_fields` (json λίστα πεδίων που άλλαξαν μετά τη δημοσίευση, για το UI badge)
+- `programs` (περίοδοι προγράμματος): id, section_id (null αν είναι Σύστημα-wide πρόγραμμα-container — βλ. σημείωση), period_start, period_end, status (`draft`|`published`), theme overrides (χρώμα/εικόνες), theme_title (προαιρετικός τίτλος θέματος περιόδου, π.χ. "Ο Μόγλης" — κυρίως Αγέλη, βλ. §8), published_at
+- `activities` (δράσεις): id, program_id, section_id (ή flag `is_system_wide`), type (`typical`|`day_trip`|`multi_day`|`other`|`no_activity`), location, starts_at, ends_at (ή end_date για `multi_day`), cost, what_to_bring, created/updated timestamps, `changed_after_publish_fields` (json λίστα πεδίων που άλλαξαν μετά τη δημοσίευση, για το UI badge). Για `type = no_activity`: τα πεδία τόπου/ώρας/κόστους παραμένουν null — η εγγραφή χρησιμεύει μόνο ως marker ότι η ημερομηνία είναι "κατειλημμένη" (καμία δράση).
 - `activity_custom_fields`: id, activity_id, τίτλος, περιγραφή
 - `activity_participants`: activity_id, leader_id (many-to-many, ποιοι βαθμοφόροι συμμετέχουν)
 
@@ -112,6 +115,12 @@ Middleware σε κάθε mutating route ελέγχει:
 - `section_leader` → δικαίωμα **μόνο** σε `program`/`activity` όπου `section_id` == δικό του section.
 - Καμία εξαίρεση client-side μόνο· ο έλεγχος γίνεται πάντα server-side πριν από κάθε write.
 
+**Επικαλυπτόμενες δράσεις ίδιας ημέρας** (business rule, ελέγχεται στο ίδιο write-path): πριν την αποθήκευση μιας νέας δράσης, ο server ελέγχει αν υπάρχει ήδη δράση (ίδιου τμήματος, Δράση Συστήματος, ή `no_activity`) την ίδια ημερομηνία. Η συμπεριφορά ρυθμίζεται από το env var `ALLOW_ACTIVITY_OVERLAP` (boolean, **default: `false`**):
+- `false` (default): το write απορρίπτεται με σαφές μήνυμα λάθους.
+- `true`: επιτρέπεται, αλλά ο client πρέπει να εμφανίσει προειδοποίηση που απαιτεί επιβεβαίωση πριν την αποθήκευση.
+
+Ο έλεγχος γίνεται πάντα server-side, ανεξάρτητα από τυχόν προειδοποίηση που έχει ήδη δείξει το UI (§ βλ. [ux-ui-guidelines.md](./ux-ui-guidelines.md)).
+
 ## 7. Email ειδοποιήσεις (Resend)
 
 Triggers (όπως ορίστηκε στο purpose doc):
@@ -121,8 +130,11 @@ Triggers (όπως ορίστηκε στο purpose doc):
 
 Retry: αν αποτύχει η κλήση στο Resend API, log το σφάλμα· δεν μπλοκάρει τη δημοσίευση (η δημοσίευση πετυχαίνει ούτως ή άλλως, το email είναι best-effort με 1 retry).
 
-## 8. Theming & αρχεία (εικόνες/λογότυπα)
+## 8. Theming & δημόσια templates ανά τμήμα
 
+- Κάθε τμήμα (Αγέλη/Ομάδα/Κοινότητα) έχει το δικό του section-specific JSX template (`views/public/templates/agele.tsx`, `omada.tsx`, `koinotita.tsx`), προσαρμοσμένο στην ηλικιακή του ομάδα — πλήρεις κατευθυντήριες γραμμές στο [docs/ux-ui-guidelines.md](./ux-ui-guidelines.md).
+- Και τα τρία templates μοιράζονται το ίδιο shared layout/data contract (`views/public/layout.tsx`) — ίδια δομή δεδομένων, ίδια λογική badges (Δράση Συστήματος, "άλλαξε μετά τη δημοσίευση"). Διαφέρουν μόνο σε: CSS custom properties (παλέτα/τυπογραφία) και έναν μικρό αριθμό section-specific components (π.χ. hero/header, icon set ανά τύπο δράσης) — όχι ξεχωριστά, ασύνδετα codebases ανά τμήμα.
+- Ανά περίοδο (`programs.theme_title` + εικόνα), μπορεί να οριστεί προαιρετικό "θέμα" (π.χ. "Ο Μόγλης" για την Αγέλη) — εμφανίζεται σε προκαθορισμένο σημείο του section template (hero τίτλος/εικόνα). Τεχνικά διαθέσιμο σε όλα τα τμήματα, χρησιμοποιείται κυρίως από την Αγέλη.
 - Αποθήκευση uploaded εικόνων στο τοπικό filesystem (`/data/uploads/`), σερβίρονται στατικά από τον Bun/Hono server.
 - Περιορισμοί στο upload: μόνο `image/jpeg|png|webp`, μέγιστο μέγεθος (π.χ. 2MB), το αρχείο αποθηκεύεται με τυχαίο (UUID) filename — ποτέ το αρχικό filename του χρήστη, ώστε να αποφεύγεται path traversal / conflicts.
 - Χρώματα θέματος αποθηκεύονται ως hex values σε πεδία της βάσης, εφαρμόζονται μέσω CSS custom properties στο SSR HTML.

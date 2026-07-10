@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Το **program.lofos.gr** είναι μια web εφαρμογή για το 4ο Σύστημα Αεροπροσκόπων Ηρακλείου: επιτρέπει σε βαθμοφόρους να ορίζουν το μηνιαίο πρόγραμμα δράσεων ανά τμήμα (Αγέλη/Ομάδα/Κοινότητα) και το προβάλλει δημόσια, χωρίς login, σε γονείς/παιδιά όταν δηλωθεί "ολοκληρωμένο".
 
-**Τρέχουσα κατάσταση**: το project είναι σε πολύ αρχικό στάδιο — υπάρχει μόνο documentation, δεν υπάρχει ακόμα κώδικας. Η πρώτη δουλειά όποιου task ξεκινήσει το scaffolding είναι να στήσει τη δομή που περιγράφεται στο architecture doc.
+**Τρέχουσα κατάσταση**: scaffolding μόνο — Bun/Hono entrypoint, Drizzle schema/migrations, και η βασική δομή φακέλων του §3 (architecture doc) υπάρχουν ως σκελετός· τα routes/views είναι ακόμα placeholders (`export {}`) χωρίς πραγματική λογική. Κανένα feature (auth, wizard, δημόσιες σελίδες) δεν έχει υλοποιηθεί ακόμα.
 
 Αυτό το project χτίζεται σε **συνεργασία human + AI coding agent**. Δεν υπάρχει άλλος senior engineer να πιάσει κάτι που ξέφυγε — τα docs παρακάτω είναι ο μηχανισμός που κρατάει τη συνέπεια ανάμεσα σε sessions.
 
@@ -16,9 +16,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 |---|---|
 | [docs/purpose-and-scope.md](docs/purpose-and-scope.md) | ΤΙ κάνει το site, ρόλοι, λειτουργικές ροές — μη τεχνικό. |
 | [docs/architecture-and-tech-stack.md](docs/architecture-and-tech-stack.md) | ΠΩΣ χτίζεται: stack, δομή project, data model, auth, security checklist, deployment. |
+| [docs/ux-ui-guidelines.md](docs/ux-ui-guidelines.md) | Κανόνες UX/UI: wizard-based διαχειριστικό, responsive/mobile-first, per-τμήμα δημόσια templates ανά ηλικιακή ομάδα. |
 | [docs/decisions.md](docs/decisions.md) | Σύντομο log μικρότερων τεχνικών αποφάσεων που δεν αλλάζουν ολόκληρη ενότητα των παραπάνω. |
 
-Αυτά τα δύο πρώτα έγγραφα είναι **δεσμευτικά**, όχι προτάσεις. Αν ένα task φαίνεται να απαιτεί κάτι που έρχεται σε αντίθεση μαζί τους (νέο dependency, διαφορετικό auth pattern, αλλαγή σε λειτουργικό κανόνα), **σταμάτα και ρώτα** αντί να αποκλίνεις σιωπηλά.
+Τα τρία πρώτα έγγραφα είναι **δεσμευτικά**, όχι προτάσεις. Αν ένα task φαίνεται να απαιτεί κάτι που έρχεται σε αντίθεση μαζί τους (νέο dependency, διαφορετικό auth pattern, αλλαγή σε λειτουργικό κανόνα), **σταμάτα και ρώτα** αντί να αποκλίνεις σιωπηλά.
 
 ## Κύκλος εργασίας ανά task
 

@@ -1,0 +1,33 @@
+[Unit]
+Description=program.lofos.gr Bun Service
+After=network.target
+
+[Service]
+# Runs as root: the code lives under /root/program-lofos, and /root is mode 700 so
+# no dedicated non-root user can traverse into it. See docs/architecture-and-tech-stack.md §10
+# for the reasoning and the systemd-sandboxing mitigation used instead of user-level isolation.
+# If the app is ever moved outside /root (e.g. /opt/program-lofos), switch back to a
+# dedicated non-root user instead of these directives.
+WorkingDirectory=/root/program-lofos
+
+ExecStart=/usr/local/bin/bun run src/index.ts
+
+Restart=always
+# Wait 3 seconds before restarting if it crashes
+RestartSec=3
+
+# Secrets (SESSION_SECRET, RESEND_API_KEY, DATABASE_PATH, PORT, BASE_URL) come from
+# the app's own .env file, never hardcoded here — see docs/architecture-and-tech-stack.md §10.
+EnvironmentFile=/root/program-lofos/.env
+Environment=NODE_ENV=production
+
+# Sandboxing mitigations in place of user-level isolation (root can't be dropped here
+# since /root blocks non-root traversal — see comment above):
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/root/program-lofos/data
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

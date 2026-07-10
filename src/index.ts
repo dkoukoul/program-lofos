@@ -1,15 +1,18 @@
 import { Hono } from "hono";
+import { serveStatic } from "hono/bun";
+import { csrf } from "hono/csrf";
+import auth from "./routes/auth";
+import publicRoutes from "./routes/public";
 
 const app = new Hono();
 
+app.use(csrf());
+app.use("/public/*", serveStatic({ root: "./" }));
+
 app.get("/healthz", (c) => c.json({ status: "ok" }));
 
-app.get("/", (c) =>
-  c.html(
-    "<!doctype html><html lang=\"el\"><head><meta charset=\"utf-8\"><title>program.lofos.gr</title></head>" +
-      "<body><h1>4ο Σύστημα Αεροπροσκόπων Ηρακλείου</h1><p>Το πρόγραμμα έρχεται σύντομα.</p></body></html>",
-  ),
-);
+app.route("/auth", auth);
+app.route("/", publicRoutes);
 
 const port = Number(process.env.PORT ?? 3010);
 

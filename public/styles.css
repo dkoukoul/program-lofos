@@ -1,0 +1,344 @@
+:root {
+  --section-accent: #2563eb;
+  --text: #1f2933;
+  --muted: #5b6b79;
+  --bg: #ffffff;
+  --card-bg: #f8fafc;
+  --border: #e2e8f0;
+  --danger: #b00020;
+  font-size: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  --mx: 50%;
+  --my: 30%;
+  margin: 0;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text);
+  line-height: 1.5;
+  background: linear-gradient(120deg, #0b3d75, #2563eb, #0ea5e9, #1e3a8a);
+  background-size: 300% 300%;
+  animation: site-gradient 18s ease infinite;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: radial-gradient(circle at var(--mx) var(--my), rgb(255 255 255 / 25%), transparent 45%);
+  transition: background-position 0.2s ease-out;
+  pointer-events: none;
+}
+
+@keyframes site-gradient {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body {
+    animation: none;
+  }
+}
+
+main {
+  padding: 1.25rem;
+  max-width: 48rem;
+  margin: 1.5rem auto;
+  background: var(--bg);
+  border-radius: 1.25rem;
+  box-shadow: 0 12px 32px rgb(0 0 0 / 20%);
+}
+
+a {
+  color: var(--section-accent);
+}
+
+/* ---- Header ---- */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: rgb(255 255 255 / 85%);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 1px 0 rgb(0 0 0 / 8%);
+}
+
+.site-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-weight: 700;
+  text-decoration: none;
+  color: var(--text);
+  flex: 1 1 100%;
+}
+
+.site-logo {
+  width: 2rem;
+  height: 2rem;
+  object-fit: contain;
+}
+
+.section-nav {
+  display: flex;
+  gap: 0.5rem;
+  flex: 1 1 auto;
+}
+
+.section-nav a {
+  padding: 0.5rem 0.75rem;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  border-radius: 0.5rem;
+  color: var(--text);
+}
+
+.section-nav a.active {
+  background: var(--section-accent);
+  color: #fff;
+}
+
+.login-trigger {
+  margin-left: auto;
+  padding: 0.5rem 0.9rem;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  border: 1px solid var(--section-accent);
+  border-radius: 0.5rem;
+  text-decoration: none;
+  color: var(--section-accent);
+  white-space: nowrap;
+}
+
+@media (min-width: 768px) {
+  .site-header {
+    flex-wrap: nowrap;
+  }
+  .site-title {
+    flex: 0 1 auto;
+  }
+}
+
+/* ---- Home / section intro ---- */
+
+.intro h1,
+.hero h1 {
+  margin-bottom: 0.25rem;
+}
+
+.hero {
+  text-align: center;
+  padding: 1.5rem 0 1rem;
+}
+
+.hero-emoji {
+  font-size: 3rem;
+  display: block;
+}
+
+.period {
+  color: var(--muted);
+  margin-top: 0;
+}
+
+.section-block {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.section-block-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.section-link {
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+.empty-state {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ---- Activity cards ---- */
+
+.activity-list {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 768px) {
+  .activity-list {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.activity-card {
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 0.85rem 1rem;
+  background: var(--card-bg);
+}
+
+.activity-card--no-activity {
+  background: #eef0f2;
+  color: var(--muted);
+}
+
+.activity-date {
+  font-weight: 700;
+  margin-bottom: 0.4rem;
+  text-transform: capitalize;
+}
+
+.activity-no-activity-note {
+  margin: 0;
+}
+
+.activity-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.4rem;
+}
+
+.badge {
+  font-size: 0.8rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: #e2e8f0;
+  white-space: nowrap;
+}
+
+.badge-system {
+  background: #fde68a;
+}
+
+.badge-changed {
+  background: #fecaca;
+}
+
+.activity-time,
+.activity-location,
+.activity-cost,
+.activity-what-to-bring {
+  margin: 0.15rem 0;
+}
+
+/* ---- Section theme variants ---- */
+
+body.theme-agele {
+  --section-accent: #f59e0b;
+}
+
+body.theme-agele .activity-card {
+  border-radius: 1.25rem;
+}
+
+body.theme-omada {
+  --section-accent: #6b7d4f;
+}
+
+body.theme-koinotita {
+  --section-accent: #334155;
+}
+
+body.theme-koinotita .activity-card {
+  border-radius: 0.25rem;
+}
+
+/* ---- Login dialog ---- */
+
+dialog#login-dialog {
+  border: none;
+  border-radius: 0.75rem;
+  padding: 1.5rem;
+  width: min(24rem, 90vw);
+}
+
+dialog#login-dialog::backdrop {
+  background: rgb(0 0 0 / 45%);
+}
+
+.dialog-close-form {
+  display: flex;
+  justify-content: flex-end;
+  margin: -0.5rem -0.5rem 0.5rem 0;
+}
+
+.dialog-close-form button {
+  min-height: 44px;
+  min-width: 44px;
+  border: none;
+  background: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+}
+
+.login-form h2 {
+  margin-top: 0;
+}
+
+.login-form input {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  box-sizing: border-box;
+  margin-top: 0.25rem;
+}
+
+.login-form button {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1rem;
+  margin-top: 0.75rem;
+  min-height: 44px;
+  border: none;
+  border-radius: 0.5rem;
+  background: var(--section-accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.login-form .error {
+  color: var(--danger);
+}
+
+.site-footer {
+  text-align: center;
+  color: rgb(255 255 255 / 85%);
+  font-size: 0.85rem;
+  padding: 1.5rem 1rem;
+  text-shadow: 0 1px 4px rgb(0 0 0 / 25%);
+}

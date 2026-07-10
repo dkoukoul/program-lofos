@@ -20,6 +20,8 @@ export const leaders = sqliteTable("leaders", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+export type Leader = typeof leaders.$inferSelect;
+
 export const magicLinks = sqliteTable("magic_links", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   leaderId: integer("leader_id").notNull().references(() => leaders.id),
@@ -54,6 +56,8 @@ export const programs = sqliteTable("programs", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
+export type Program = typeof programs.$inferSelect;
+
 export const activities = sqliteTable("activities", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   programId: integer("program_id").notNull().references(() => programs.id),
@@ -73,6 +77,8 @@ export const activities = sqliteTable("activities", {
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });
+
+export type Activity = typeof activities.$inferSelect;
 
 export const activityCustomFields = sqliteTable("activity_custom_fields", {
   id: integer("id").primaryKey({ autoIncrement: true }),

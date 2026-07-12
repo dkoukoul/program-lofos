@@ -342,3 +342,231 @@ dialog#login-dialog::backdrop {
   padding: 1.5rem 1rem;
   text-shadow: 0 1px 4px rgb(0 0 0 / 25%);
 }
+
+/* ---- Admin (διαχειριστικό) ---- */
+
+body.admin main.admin-main {
+  max-width: 40rem;
+}
+
+.admin-leader {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.button,
+.link-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 44px;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card-bg);
+  color: var(--text);
+  text-decoration: none;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.button-primary {
+  background: var(--section-accent);
+  border-color: var(--section-accent);
+  color: #fff;
+}
+
+.link-button {
+  border: none;
+  background: none;
+  padding: 0.5rem 0;
+  color: var(--section-accent);
+  min-height: 44px;
+}
+
+.link-button--danger {
+  color: var(--danger);
+}
+
+form.activity-form,
+form.program-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.activity-form label,
+.program-form label {
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+.activity-form input[type="text"],
+.activity-form input[type="date"],
+.activity-form input[type="time"],
+.activity-form textarea,
+.activity-form select,
+.program-form input,
+.program-form select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.65rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-sizing: border-box;
+}
+
+.activity-form textarea {
+  min-height: 5rem;
+}
+
+.wizard-step {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.wizard-step--optional summary {
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0.5rem 0;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.custom-field {
+  border: 1px dashed var(--border);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.date-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin: 0.35rem 0;
+}
+
+.chip {
+  min-height: 44px;
+  padding: 0.4rem 0.8rem;
+  border-radius: 999px;
+  border: 1px solid var(--section-accent);
+  background: #fff;
+  color: var(--section-accent);
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.hint {
+  color: var(--muted);
+}
+
+.sticky-save {
+  position: sticky;
+  bottom: 0.75rem;
+  width: 100%;
+  margin-top: 0.75rem;
+}
+
+.overlap-warning {
+  margin: 0.5rem 0;
+  padding: 0.6rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+}
+
+.overlap-warning--blocked {
+  background: #fee2e2;
+  border-color: var(--danger);
+}
+
+.overlap-warning--soft {
+  background: #fef3c7;
+  border-color: #f59e0b;
+}
+
+.overlap-preview-card {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  text-decoration: none;
+  color: var(--text);
+}
+
+.overlap-preview-date {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ---- Admin: programs ---- */
+
+.programs-header,
+.program-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.programs-list {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.program-card a {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card-bg);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.badge-status-draft {
+  background: #e2e8f0;
+}
+
+.badge-status-published {
+  background: #bbf7d0;
+}
+
+.program-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.quick-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 1rem 0;
+}
+
+/* ---- Admin: activity list (τμήμα του program screen) ---- */
+
+.activity-card-link {
+  display: block;
+  text-decoration: none;
+  color: var(--text);
+}
+
+body.admin .activity-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}

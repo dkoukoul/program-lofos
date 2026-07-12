@@ -17,6 +17,9 @@ export const leaders = sqliteTable("leaders", {
   email: text("email").notNull().unique(),
   role: text("role", { enum: ["section_leader", "system_staff"] }).notNull(),
   sectionId: integer("section_id").references(() => sections.id),
+  // false = αφαιρέθηκε από το config/leaders.json· η πρόσβαση ανακαλείται χωρίς διαγραφή
+  // της εγγραφής (τη χρειάζονται ακόμα sessions/magic_links/activity_participants ως FK).
+  active: integer("active", { mode: "boolean" }).notNull().default(true),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 

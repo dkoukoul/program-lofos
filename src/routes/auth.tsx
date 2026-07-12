@@ -53,7 +53,7 @@ auth.post("/request-link", async (c) => {
 
   const [leader] = await db.select().from(leaders).where(eq(leaders.email, email)).limit(1);
 
-  if (leader) {
+  if (leader?.active) {
     const rawToken = await createMagicLink(leader.id);
     const verifyUrl = `${process.env.BASE_URL ?? ""}/auth/verify?token=${rawToken}`;
     await sendMagicLinkEmail(leader.email, verifyUrl);

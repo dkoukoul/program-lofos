@@ -1,0 +1,1 @@
+ALTER TABLE `leaders` ADD `active` integer DEFAULT true NOT NULL;

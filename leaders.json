@@ -1,0 +1,8 @@
+{
+  "leaders": [
+    { "name": "Δημήτρης Κουκουλάκης", "email": "dimitris.koukoulakis@gmail.com", "role": "system_staff", "active": true },
+    { "name": "Όνομα Επώνυμο", "email": "voithos-ageli@example.com", "role": "section_leader", "section": "agele", "active": true },
+    { "name": "Όνομα Επώνυμο", "email": "voithos-omadas@example.com", "role": "section_leader", "section": "omada", "active": true },
+    { "name": "Όνομα Επώνυμο", "email": "voithos-koinotitas@example.com", "role": "section_leader", "section": "koinotita", "active": true }
+  ]
+}

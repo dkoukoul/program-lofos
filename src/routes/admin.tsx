@@ -14,7 +14,7 @@ import {
   type Program,
 } from "../db/schema";
 import { requireAuth } from "../lib/auth";
-import { canEditSection, requireProgramAccess } from "../lib/authorize";
+import { requireProgramAccess } from "../lib/authorize";
 import {
   checkOverlapPolicy,
   diffChangedFields,
@@ -77,12 +77,17 @@ async function getOverlapCandidates(program: Program): Promise<Activity[]> {
 
 async function getAvailableParticipants(program: Program): Promise<Leader[]> {
   if (program.sectionId === null) {
-    return db.select().from(leaders).where(eq(leaders.role, "system_staff"));
+    return db.select().from(leaders).where(and(eq(leaders.role, "system_staff"), eq(leaders.active, true)));
   }
   return db
     .select()
     .from(leaders)
-    .where(or(eq(leaders.sectionId, program.sectionId), eq(leaders.role, "system_staff")));
+    .where(
+      and(
+        or(eq(leaders.sectionId, program.sectionId), eq(leaders.role, "system_staff")),
+        eq(leaders.active, true),
+      ),
+    );
 }
 
 async function getCustomFields(activityId: number): Promise<CustomFieldValue[]> {
@@ -120,12 +125,14 @@ async function replaceParticipants(activityId: number, leaderIds: number[]): Pro
 
 async function getNotificationRecipients(sectionId: number | null): Promise<Leader[]> {
   if (sectionId === null) {
-    return db.select().from(leaders).where(eq(leaders.role, "system_staff"));
+    return db.select().from(leaders).where(and(eq(leaders.role, "system_staff"), eq(leaders.active, true)));
   }
   return db
     .select()
     .from(leaders)
-    .where(or(eq(leaders.sectionId, sectionId), eq(leaders.role, "system_staff")));
+    .where(
+      and(or(eq(leaders.sectionId, sectionId), eq(leaders.role, "system_staff")), eq(leaders.active, true)),
+    );
 }
 
 type ParsedActivityForm = {
@@ -277,7 +284,7 @@ admin.post("/programs/:id/publish", async (c) => {
       .where(eq(programs.id, program.id));
 
     const recipients = await getNotificationRecipients(program.sectionId);
-    void sendProgramPublishedEmail(recipients, program);
+    await sendProgramPublishedEmail(recipients, program);
   }
   return c.redirect(`/admin/programs/${program.id}`);
 });
@@ -403,6 +410,65 @@ admin.post("/programs/:id/activities", async (c) => {
   return c.redirect(`/admin/programs/${program.id}`);
 });
 
+// Σημείωση route-ordering: τα quick-add endpoints (static path segment "quick-typical"/
+// "quick-no-activity") πρέπει να δηλωθούν πριν το γενικό "/activities/:activityId",
+// αλλιώς το Hono θα ταιριάξει πρώτα το :activityId param (θα πιάσει "quick-typical" ως id).
+admin.post("/programs/:id/activities/quick-typical", async (c) => {
+  const program = c.get("program");
+  const candidates = await getOverlapCandidates(program);
+  const [date] = nextAvailableSundays(
+    candidates.map((a) => a.date),
+    program.periodStart,
+    program.periodEnd,
+    1,
+  );
+
+  if (!date) return c.redirect(`/admin/programs/${program.id}?error=no-available-sunday`);
+
+  const defaults = typeDefaults("typical");
+  const [activity] = await db
+    .insert(activities)
+    .values({
+      programId: program.id,
+      isSystemWide: program.sectionId === null,
+      type: "typical",
+      date,
+      location: defaults.location ?? null,
+      startsAt: defaults.startTime ? combineDateTime(toDateInputValue(date), defaults.startTime) : null,
+      endsAt: defaults.endTime ? combineDateTime(toDateInputValue(date), defaults.endTime) : null,
+      whatToBring: defaults.whatToBring ?? null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .returning();
+
+  return c.redirect(`/admin/programs/${program.id}/activities/${activity!.id}/edit`);
+});
+
+admin.post("/programs/:id/activities/quick-no-activity", async (c) => {
+  const program = c.get("program");
+  const candidates = await getOverlapCandidates(program);
+  const [date] = nextAvailableSundays(
+    candidates.map((a) => a.date),
+    program.periodStart,
+    program.periodEnd,
+    1,
+  );
+
+  if (!date) return c.redirect(`/admin/programs/${program.id}?error=no-available-sunday`);
+
+  await db.insert(activities).values({
+    programId: program.id,
+    isSystemWide: program.sectionId === null,
+    type: "no_activity",
+    date,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  return c.redirect(`/admin/programs/${program.id}`);
+});
+
 admin.get("/programs/:id/activities/:activityId/edit", async (c) => {
   const leader = c.get("leader");
   const program = c.get("program");
@@ -513,7 +579,7 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
   const beforeChangedCount = (before.changedAfterPublishFields ?? []).length;
   if (program.status === "published" && changedFields.length > beforeChangedCount) {
     const recipients = await getNotificationRecipients(program.sectionId);
-    void sendProgramChangedEmail(recipients, program, { ...before, ...after, type: data.type } as Activity);
+    await sendProgramChangedEmail(recipients, program, { ...before, ...after, type: data.type } as Activity);
   }
 
   return c.redirect(`/admin/programs/${program.id}`);
@@ -526,62 +592,6 @@ admin.post("/programs/:id/activities/:activityId/delete", async (c) => {
   await db.delete(activityCustomFields).where(eq(activityCustomFields.activityId, activityId));
   await db.delete(activityParticipants).where(eq(activityParticipants.activityId, activityId));
   await db.delete(activities).where(and(eq(activities.id, activityId), eq(activities.programId, program.id)));
-
-  return c.redirect(`/admin/programs/${program.id}`);
-});
-
-admin.post("/programs/:id/activities/quick-typical", async (c) => {
-  const program = c.get("program");
-  const candidates = await getOverlapCandidates(program);
-  const [date] = nextAvailableSundays(
-    candidates.map((a) => a.date),
-    program.periodStart,
-    program.periodEnd,
-    1,
-  );
-
-  if (!date) return c.redirect(`/admin/programs/${program.id}?error=no-available-sunday`);
-
-  const defaults = typeDefaults("typical");
-  const [activity] = await db
-    .insert(activities)
-    .values({
-      programId: program.id,
-      isSystemWide: program.sectionId === null,
-      type: "typical",
-      date,
-      location: defaults.location ?? null,
-      startsAt: defaults.startTime ? combineDateTime(toDateInputValue(date), defaults.startTime) : null,
-      endsAt: defaults.endTime ? combineDateTime(toDateInputValue(date), defaults.endTime) : null,
-      whatToBring: defaults.whatToBring ?? null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    })
-    .returning();
-
-  return c.redirect(`/admin/programs/${program.id}/activities/${activity!.id}/edit`);
-});
-
-admin.post("/programs/:id/activities/quick-no-activity", async (c) => {
-  const program = c.get("program");
-  const candidates = await getOverlapCandidates(program);
-  const [date] = nextAvailableSundays(
-    candidates.map((a) => a.date),
-    program.periodStart,
-    program.periodEnd,
-    1,
-  );
-
-  if (!date) return c.redirect(`/admin/programs/${program.id}?error=no-available-sunday`);
-
-  await db.insert(activities).values({
-    programId: program.id,
-    isSystemWide: program.sectionId === null,
-    type: "no_activity",
-    date,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
 
   return c.redirect(`/admin/programs/${program.id}`);
 });

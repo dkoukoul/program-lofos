@@ -53,7 +53,8 @@ export async function verifyMagicLink(rawToken: string): Promise<Leader | null> 
   await db.update(magicLinks).set({ usedAt: new Date() }).where(eq(magicLinks.id, link.id));
 
   const [leader] = await db.select().from(leaders).where(eq(leaders.id, link.leaderId)).limit(1);
-  return leader ?? null;
+  if (!leader?.active) return null;
+  return leader;
 }
 
 export async function createSession(leaderId: number, userAgent: string | null): Promise<string> {
@@ -75,7 +76,8 @@ async function findLeaderBySessionToken(rawToken: string): Promise<Leader | null
   if (!session || session.expiresAt.getTime() < Date.now()) return null;
 
   const [leader] = await db.select().from(leaders).where(eq(leaders.id, session.leaderId)).limit(1);
-  return leader ?? null;
+  if (!leader?.active) return null;
+  return leader;
 }
 
 export async function destroySessionByToken(rawToken: string): Promise<void> {

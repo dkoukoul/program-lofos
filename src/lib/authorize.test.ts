@@ -9,6 +9,7 @@ function makeLeader(overrides: Partial<Leader>): Leader {
     email: "test@example.com",
     role: "section_leader",
     sectionId: null,
+    active: true,
     createdAt: new Date(),
     ...overrides,
   };

@@ -49,6 +49,23 @@ export function mergeAndSortActivities<T extends Pick<ActivityRow, "date">>(
   );
 }
 
+/**
+ * Επιλέγει τη δράση που προβάλλεται "σε πρώτο πλάνο" στην κάρτα του τμήματος
+ * στην αρχική: την πρώτη δράση από σήμερα και μετά (τρέχουσα/επόμενη), αλλιώς
+ * — αν όλες έχουν περάσει — την πιο πρόσφατη. Προϋποθέτει δράσεις ταξινομημένες
+ * χρονολογικά αύξουσα (όπως τις επιστρέφει η mergeAndSortActivities).
+ */
+export function selectFeaturedActivity<T extends Pick<ActivityRow, "date">>(
+  sortedActivities: T[],
+  now: Date = new Date(),
+): T | null {
+  if (sortedActivities.length === 0) return null;
+  const startOfToday = new Date(now);
+  startOfToday.setHours(0, 0, 0, 0);
+  const upcoming = sortedActivities.find((activity) => activity.date >= startOfToday);
+  return upcoming ?? sortedActivities[sortedActivities.length - 1] ?? null;
+}
+
 export type SectionSchedule = {
   program: ProgramRow | null;
   activities: ActivityRow[];

@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db/client";
 import { sections } from "../db/schema";
+import { getOptionalLeader } from "../lib/auth";
 import { getSectionSchedule } from "../lib/schedule";
 import { HomePage } from "../views/public/home";
 import { AgeleSectionPage } from "../views/public/templates/agele";
@@ -25,7 +26,7 @@ function loginQuery(c: { req: { query: (name: string) => string | undefined } })
 }
 
 publicRoutes.get("/", async (c) => {
-  const allSections = await db.select().from(sections);
+  const [allSections, leader] = await Promise.all([db.select().from(sections), getOptionalLeader(c)]);
   const blocks = await Promise.all(
     allSections.map(async (section) => {
       const { program, activities } = await getSectionSchedule(section.id);
@@ -33,7 +34,7 @@ publicRoutes.get("/", async (c) => {
     }),
   );
 
-  return c.html(<HomePage blocks={blocks} {...loginQuery(c)} />);
+  return c.html(<HomePage blocks={blocks} isLoggedIn={leader !== null} {...loginQuery(c)} />);
 });
 
 for (const type of SECTION_ORDER) {
@@ -42,9 +43,18 @@ for (const type of SECTION_ORDER) {
     if (!section) return c.notFound();
 
     const { program, activities } = await getSectionSchedule(section.id);
+    const leader = await getOptionalLeader(c);
     const SectionPage = SECTION_PAGES[type];
 
-    return c.html(<SectionPage section={section} program={program} scheduleActivities={activities} {...loginQuery(c)} />);
+    return c.html(
+      <SectionPage
+        section={section}
+        program={program}
+        scheduleActivities={activities}
+        isLoggedIn={leader !== null}
+        {...loginQuery(c)}
+      />,
+    );
   });
 }
 

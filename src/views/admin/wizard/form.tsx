@@ -1,5 +1,5 @@
 import type { Activity, Leader, Program } from "../../../db/schema";
-import { ACTIVITY_TYPE_INFO } from "../../public/layout";
+import { ACTIVITY_TYPE_INFO, formatDateNumeric } from "../../public/layout";
 import { typeDefaults, type ActivityTypeDefaults } from "../../../lib/activities";
 import { AdminLayout } from "../layout";
 import { OverlapWarning } from "./overlap-warning";
@@ -179,7 +179,7 @@ export function ActivityFormBody({
                 class="chip"
                 onclick={`var d=document.getElementById('date'); d.value='${toDateInputValue(chip)}'; d.dispatchEvent(new Event('change'));`}
               >
-                {toDateInputValue(chip)}
+                {formatDateNumeric(chip)}
               </button>
             ))}
           </div>

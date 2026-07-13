@@ -109,6 +109,14 @@ describe("Πρόσβαση σε πρόγραμμα (authorization)", () => {
     expect(res.status).toBe(200);
   });
 
+  test("GET /programs/new δεν παγιδεύεται από το requireProgramAccess (route-ordering regression)", async () => {
+    const leader = await makeLeader({ role: "system_staff", sectionId: null });
+    const cookie = await cookieFor(leader);
+
+    const res = await app.request(`/admin/programs/new`, { headers: { cookie } });
+    expect(res.status).toBe(200);
+  });
+
   test("χωρίς session -> redirect στο login", async () => {
     const section = await makeSection("agele");
     const program = await makeProgram(section.id);

@@ -123,6 +123,12 @@ export async function requireAuth(c: Context, next: Next) {
   await next();
 }
 
+/** Επιστρέφει τον συνδεδεμένο βαθμοφόρο αν υπάρχει έγκυρο session, αλλιώς null — χωρίς redirect. Για δημόσιες σελίδες που απλώς προσαρμόζουν το header. */
+export async function getOptionalLeader(c: Context): Promise<Leader | null> {
+  const rawToken = getSessionCookie(c);
+  return rawToken ? findLeaderBySessionToken(rawToken) : null;
+}
+
 const rateLimitBuckets = new Map<string, { count: number; windowStart: number }>();
 
 export function checkRateLimit(key: string): boolean {

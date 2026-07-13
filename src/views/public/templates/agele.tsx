@@ -1,5 +1,5 @@
 import type { activities, programs, sections } from "../../../db/schema";
-import { SectionSchedulePage } from "../layout";
+import { SECTION_VARIANTS, SectionSchedulePage } from "../layout";
 
 type Props = {
   section: typeof sections.$inferSelect;
@@ -7,13 +7,9 @@ type Props = {
   scheduleActivities: (typeof activities.$inferSelect)[];
   loginStatus?: string;
   loginError?: string;
+  isLoggedIn?: boolean;
 };
 
 export function AgeleSectionPage(props: Props) {
-  return (
-    <SectionSchedulePage
-      {...props}
-      variant={{ type: "agele", accent: "#f59e0b", heroEmoji: "🐺", bodyClass: "theme-agele" }}
-    />
-  );
+  return <SectionSchedulePage {...props} variant={SECTION_VARIANTS.agele} />;
 }

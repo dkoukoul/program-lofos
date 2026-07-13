@@ -1,5 +1,5 @@
 import { describe, test, expect } from "bun:test";
-import { mergeAndSortActivities, selectActiveProgram } from "./schedule";
+import { mergeAndSortActivities, selectActiveProgram, selectFeaturedActivity } from "./schedule";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -68,5 +68,32 @@ describe("mergeAndSortActivities", () => {
     const systemActivity = { date: new Date(2026, 6, 12) };
     const result = mergeAndSortActivities([sectionActivity], [systemActivity]);
     expect(result).toEqual([sectionActivity, systemActivity]);
+  });
+});
+
+describe("selectFeaturedActivity", () => {
+  const now = new Date(2026, 6, 15);
+
+  test("returns null when there are no activities", () => {
+    expect(selectFeaturedActivity([], now)).toBeNull();
+  });
+
+  test("prefers the first activity from today onwards", () => {
+    const past = { date: new Date(2026, 6, 5) };
+    const next = { date: new Date(2026, 6, 19) };
+    const later = { date: new Date(2026, 6, 26) };
+    expect(selectFeaturedActivity([past, next, later], now)).toBe(next);
+  });
+
+  test("treats an activity happening today as the featured one", () => {
+    const today = { date: new Date(2026, 6, 15) };
+    const later = { date: new Date(2026, 6, 22) };
+    expect(selectFeaturedActivity([today, later], now)).toBe(today);
+  });
+
+  test("falls back to the most recent activity when all are in the past", () => {
+    const older = { date: new Date(2026, 6, 1) };
+    const recent = { date: new Date(2026, 6, 8) };
+    expect(selectFeaturedActivity([older, recent], now)).toBe(recent);
   });
 });

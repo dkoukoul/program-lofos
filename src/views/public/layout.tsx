@@ -12,6 +12,27 @@ export const SECTION_LABELS: Record<SectionType, string> = {
   koinotita: "Κοινότητα",
 };
 
+export type SectionVariant = {
+  type: SectionType;
+  accent: string;
+  heroEmoji?: string;
+  bodyClass: string;
+};
+
+/** Ταυτότητα ανά τμήμα (accent/emoji/theme class) — πηγή αλήθειας για δημόσιες σελίδες + αρχική. */
+export const SECTION_VARIANTS: Record<SectionType, SectionVariant> = {
+  agele: { type: "agele", accent: "#eab308", heroEmoji: "🐺", bodyClass: "theme-agele" },
+  omada: { type: "omada", accent: "#16a34a", heroEmoji: "🧭", bodyClass: "theme-omada" },
+  koinotita: { type: "koinotita", accent: "#dc2626", bodyClass: "theme-koinotita" },
+};
+
+/** Λογότυπα τμήματος (public/images) — εικονίδιο ταυτότητας στις κάρτες της αρχικής. */
+export const SECTION_LOGOS: Record<SectionType, string> = {
+  agele: "/public/images/Logo_cubs.png",
+  omada: "/public/images/Logo_scouts.png",
+  koinotita: "/public/images/Logo_explorers.png",
+};
+
 export const ACTIVITY_TYPE_INFO: Record<ActivityRow["type"], { icon: string; label: string }> = {
   typical: { icon: "🏕️", label: "Τυπική συγκέντρωση" },
   day_trip: { icon: "🚌", label: "Ημερήσια δράση" },
@@ -29,23 +50,44 @@ export const CHANGED_FIELD_LABELS: Record<string, string> = {
   whatToBring: "Άλλαξε τι να κρατάνε",
 };
 
-const dateFormatter = new Intl.DateTimeFormat("el-GR", { weekday: "long", day: "numeric", month: "long" });
 const timeFormatter = new Intl.DateTimeFormat("el-GR", { hour: "2-digit", minute: "2-digit", hour12: false });
+const weekdayFormatter = new Intl.DateTimeFormat("el-GR", { weekday: "long" });
+const shortWeekdayFormatter = new Intl.DateTimeFormat("el-GR", { weekday: "short" });
+/** Αριθμητική ημερομηνία σε μορφή ηη/μμ/εεεε (δεσμευτική σε όλη την εφαρμογή, βλ. ux-ui-guidelines §1). */
+const numericDateFormatter = new Intl.DateTimeFormat("el-GR", { day: "2-digit", month: "2-digit", year: "numeric" });
 
+/** Ημερομηνία σε μορφή ηη/μμ/εεεε (π.χ. "05/08/2026"). */
+export function formatDateNumeric(date: Date): string {
+  return numericDateFormatter.format(date);
+}
+
+/** Ημέρα + ημερομηνία ηη/μμ/εεεε (π.χ. "Τρίτη, 05/08/2026"). */
 export function formatActivityDate(date: Date): string {
-  return dateFormatter.format(date);
+  return `${weekdayFormatter.format(date)}, ${formatDateNumeric(date)}`;
 }
 
 export function formatActivityTime(date: Date): string {
   return timeFormatter.format(date);
 }
 
+/** Μόνο η ημέρα (π.χ. "Κυριακή") — για έντονη προβολή στην κάρτα της αρχικής. */
+export function formatWeekday(date: Date): string {
+  return weekdayFormatter.format(date);
+}
+
+/** Σύντομη ημέρα + αριθμός (π.χ. "Κυρ 13/07/2026") — για τη σύνοψη μήνα στην πίσω όψη. */
+export function formatShortDay(date: Date): string {
+  return `${shortWeekdayFormatter.format(date)} ${formatDateNumeric(date)}`;
+}
+
+/** Εύρος ωρών σε 24ωρη μορφή, ή null αν δεν υπάρχει ώρα έναρξης. */
+export function formatTimeRange(startsAt: Date | null, endsAt: Date | null): string | null {
+  if (!startsAt) return null;
+  return endsAt ? `${formatActivityTime(startsAt)} – ${formatActivityTime(endsAt)}` : formatActivityTime(startsAt);
+}
+
 export function formatPeriod(periodStart: Date, periodEnd: Date): string {
-  const start = new Intl.DateTimeFormat("el-GR", { day: "numeric", month: "long" }).format(periodStart);
-  const end = new Intl.DateTimeFormat("el-GR", { day: "numeric", month: "long", year: "numeric" }).format(
-    periodEnd,
-  );
-  return `${start} – ${end}`;
+  return `${formatDateNumeric(periodStart)} – ${formatDateNumeric(periodEnd)}`;
 }
 
 export function ActivityCard({ activity }: { activity: ActivityRow }) {
@@ -109,6 +151,7 @@ type PublicLayoutProps = {
   bodyClass?: string;
   loginStatus?: string;
   loginError?: string;
+  isLoggedIn?: boolean;
   children: unknown;
 };
 
@@ -119,6 +162,7 @@ export function PublicLayout({
   bodyClass,
   loginStatus,
   loginError,
+  isLoggedIn,
   children,
 }: PublicLayoutProps) {
   const currentPath = activeSection ? `/${activeSection}` : "/";
@@ -146,13 +190,19 @@ export function PublicLayout({
             4ο Σύστημα Αεροπροσκόπων Ηρακλείου
           </a>
           <SectionNav active={activeSection} />
-          <a
-            href={`/auth/login?returnTo=${encodeURIComponent(currentPath)}`}
-            class="login-trigger"
-            onclick="event.preventDefault(); document.getElementById('login-dialog').showModal();"
-          >
-            Σύνδεση βαθμοφόρων
-          </a>
+          {isLoggedIn ? (
+            <a href="/admin" class="login-trigger">
+              Διαχείριση δράσεων
+            </a>
+          ) : (
+            <a
+              href={`/auth/login?returnTo=${encodeURIComponent(currentPath)}`}
+              class="login-trigger"
+              onclick="event.preventDefault(); document.getElementById('login-dialog').showModal();"
+            >
+              Σύνδεση βαθμοφόρων
+            </a>
+          )}
         </header>
 
         <main>{children}</main>
@@ -186,13 +236,6 @@ export function PublicLayout({
   );
 }
 
-type SectionScheduleVariant = {
-  type: SectionType;
-  accent: string;
-  heroEmoji?: string;
-  bodyClass: string;
-};
-
 export function SectionSchedulePage({
   section,
   program,
@@ -200,13 +243,15 @@ export function SectionSchedulePage({
   variant,
   loginStatus,
   loginError,
+  isLoggedIn,
 }: {
   section: typeof sections.$inferSelect;
   program: { periodStart: Date; periodEnd: Date; themeTitle: string | null } | null;
   scheduleActivities: ActivityRow[];
-  variant: SectionScheduleVariant;
+  variant: SectionVariant;
   loginStatus?: string;
   loginError?: string;
+  isLoggedIn?: boolean;
 }) {
   const label = SECTION_LABELS[variant.type];
 
@@ -218,6 +263,7 @@ export function SectionSchedulePage({
       bodyClass={variant.bodyClass}
       loginStatus={loginStatus}
       loginError={loginError}
+      isLoggedIn={isLoggedIn}
     >
       <section class="hero">
         {variant.heroEmoji && (

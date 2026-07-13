@@ -1,5 +1,5 @@
 import type { activities, programs, sections } from "../../../db/schema";
-import { SectionSchedulePage } from "../layout";
+import { SECTION_VARIANTS, SectionSchedulePage } from "../layout";
 
 type Props = {
   section: typeof sections.$inferSelect;
@@ -7,13 +7,9 @@ type Props = {
   scheduleActivities: (typeof activities.$inferSelect)[];
   loginStatus?: string;
   loginError?: string;
+  isLoggedIn?: boolean;
 };
 
 export function OmadaSectionPage(props: Props) {
-  return (
-    <SectionSchedulePage
-      {...props}
-      variant={{ type: "omada", accent: "#6b7d4f", heroEmoji: "🧭", bodyClass: "theme-omada" }}
-    />
-  );
+  return <SectionSchedulePage {...props} variant={SECTION_VARIANTS.omada} />;
 }

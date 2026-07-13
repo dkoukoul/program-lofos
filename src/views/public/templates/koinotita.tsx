@@ -1,5 +1,5 @@
 import type { activities, programs, sections } from "../../../db/schema";
-import { SectionSchedulePage } from "../layout";
+import { SECTION_VARIANTS, SectionSchedulePage } from "../layout";
 
 type Props = {
   section: typeof sections.$inferSelect;
@@ -7,10 +7,9 @@ type Props = {
   scheduleActivities: (typeof activities.$inferSelect)[];
   loginStatus?: string;
   loginError?: string;
+  isLoggedIn?: boolean;
 };
 
 export function KoinotitaSectionPage(props: Props) {
-  return (
-    <SectionSchedulePage {...props} variant={{ type: "koinotita", accent: "#334155", bodyClass: "theme-koinotita" }} />
-  );
+  return <SectionSchedulePage {...props} variant={SECTION_VARIANTS.koinotita} />;
 }

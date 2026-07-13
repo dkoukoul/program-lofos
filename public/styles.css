@@ -164,19 +164,6 @@ a {
   margin-top: 0;
 }
 
-.section-block {
-  margin-top: 2rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-}
-
-.section-block-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 0.5rem;
-}
-
 .section-link {
   font-size: 0.9rem;
   white-space: nowrap;
@@ -185,6 +172,260 @@ a {
 .empty-state {
   color: var(--muted);
   font-style: italic;
+}
+
+/* ---- Home: κάρτες τμημάτων (3D flip, ratio τραπουλόχαρτου) ---- */
+
+body.home main {
+  max-width: 68rem;
+}
+
+.section-cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  gap: 1.5rem;
+  margin-top: 1.5rem;
+}
+
+@media (min-width: 860px) {
+  .section-cards {
+    grid-template-columns: repeat(3, 1fr);
+    align-items: start;
+  }
+}
+
+/* Η κάρτα: μέγεθος & αναλογία τραπουλόχαρτου (5:7, portrait). */
+.play-card {
+  position: relative;
+  width: 100%;
+  max-width: 19rem;
+  aspect-ratio: 5 / 7;
+  perspective: 1600px;
+}
+
+.play-card-inner {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  transition: transform 0.7s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.play-card.is-flipped .play-card-inner {
+  transform: rotateY(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .play-card-inner {
+    transition: none;
+  }
+}
+
+.play-card-face {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem 1.05rem;
+  overflow: hidden;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-top: 6px solid var(--card-accent, var(--section-accent));
+  border-radius: 0.9rem;
+  box-shadow: 0 10px 26px rgb(0 0 0 / 22%);
+  backface-visibility: hidden;
+}
+
+.play-card-back {
+  transform: rotateY(180deg);
+}
+
+/* Faded λογότυπο-έμβλημα στο φόντο της μπροστινής όψης. */
+.card-watermark {
+  position: absolute;
+  right: -1.5rem;
+  bottom: -1.5rem;
+  width: 10rem;
+  height: 10rem;
+  object-fit: contain;
+  opacity: 0.1;
+  pointer-events: none;
+  user-select: none;
+}
+
+.card-head {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.card-head--back {
+  justify-content: space-between;
+}
+
+.card-head-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.card-head-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.card-emoji {
+  width: 1.9rem;
+  height: 1.9rem;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* Σώμα μπροστινής όψης: η επόμενη δράση, κεντραρισμένη. */
+.card-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  position: relative;
+}
+
+.card-body--center {
+  align-items: center;
+  text-align: center;
+}
+
+.card-featured {
+  text-align: center;
+}
+
+.card-next-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.card-featured .activity-badges {
+  justify-content: center;
+  margin-bottom: 0.35rem;
+}
+
+.card-weekday {
+  margin: 0;
+  font-size: 1.75rem;
+  font-weight: 800;
+  line-height: 1.1;
+  text-transform: capitalize;
+  color: var(--card-accent, var(--section-accent));
+}
+
+.card-daymonth {
+  margin: 0.1rem 0 0;
+  font-size: 1rem;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+
+.card-time {
+  margin: 0.45rem 0 0.3rem;
+  font-size: 1.4rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.card-type,
+.card-location {
+  margin: 0.1rem 0;
+  font-size: 0.95rem;
+}
+
+.card-location {
+  color: var(--muted);
+}
+
+.card-no-activity {
+  margin: 0.5rem 0 0;
+  color: var(--muted);
+}
+
+/* Κουμπιά flip. */
+.flip-btn {
+  border: 1px solid var(--card-accent, var(--section-accent));
+  border-radius: 0.6rem;
+  background: #fff;
+  color: var(--card-accent, var(--section-accent));
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.flip-btn--primary {
+  min-height: 44px;
+  width: 100%;
+  padding: 0.55rem 0.75rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  background: var(--card-accent, var(--section-accent));
+  color: #fff;
+}
+
+/* Κίτρινο accent (Αγέλη): σκούρο κείμενο για επαρκή αντίθεση πάνω στο συμπαγές φόντο. */
+.section-agele .flip-btn--primary {
+  color: #1f2933;
+}
+
+.flip-btn--back {
+  min-height: 36px;
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+}
+
+/* Πίσω όψη: πλήρες πρόγραμμα με κύλιση εντός της κάρτας. */
+.card-back-period {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.card-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  margin: 0 -0.35rem;
+  padding: 0 0.35rem;
+}
+
+.card-scroll .card-full-list {
+  grid-template-columns: 1fr;
+  gap: 0.5rem;
+  margin: 0.25rem 0;
+}
+
+.card-full-list .activity-card {
+  padding: 0.5rem 0.6rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.card-full-list .activity-date {
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.card-full-list .badge {
+  font-size: 0.72rem;
+}
+
+.section-link--back {
+  font-size: 0.8rem;
+}
+
+/* Στατική κάρτα (τμήμα χωρίς πρόγραμμα/δράσεις) — ίδιο κουτί, χωρίς flip. */
+.play-card--static .play-card-face {
+  position: absolute;
 }
 
 /* ---- Activity cards ---- */
@@ -259,19 +500,25 @@ a {
 /* ---- Section theme variants ---- */
 
 body.theme-agele {
-  --section-accent: #f59e0b;
+  --section-accent: #eab308;
 }
 
 body.theme-agele .activity-card {
   border-radius: 1.25rem;
 }
 
+/* Κίτρινο accent: λευκό κείμενο πάνω σε συμπαγές φόντο accent έχει χαμηλή αντίθεση — σκούρο κείμενο εκεί. */
+body.theme-agele .section-nav a.active,
+body.theme-agele .login-form button {
+  color: #1f2933;
+}
+
 body.theme-omada {
-  --section-accent: #6b7d4f;
+  --section-accent: #16a34a;
 }
 
 body.theme-koinotita {
-  --section-accent: #334155;
+  --section-accent: #dc2626;
 }
 
 body.theme-koinotita .activity-card {

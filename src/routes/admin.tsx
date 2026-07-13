@@ -38,8 +38,6 @@ import { ProgramScreen } from "../views/admin/wizard/program-screen";
 const admin = new Hono();
 
 admin.use("*", requireAuth);
-admin.use("/programs/:id", requireProgramAccess);
-admin.use("/programs/:id/*", requireProgramAccess);
 
 function allowOverlapEnv(): boolean {
   return process.env.ALLOW_ACTIVITY_OVERLAP === "true";
@@ -262,6 +260,14 @@ admin.post("/programs", async (c) => {
 
   return c.redirect(`/admin/programs/${program!.id}`);
 });
+
+// Σημείωση route-ordering: το requireProgramAccess middleware πρέπει να δηλωθεί
+// ΜΕΤΑ τα στατικά "/programs", "/programs/new" routes παραπάνω — το Hono συνθέτει
+// middleware+handlers με τη σειρά δήλωσης, όχι με βάση ειδικότητα pattern, άρα ένα
+// use("/programs/:id", ...) δηλωμένο νωρίτερα θα "έπιανε" και το "/programs/new"
+// (id="new") πριν προλάβει να τρέξει ο δικός του handler.
+admin.use("/programs/:id", requireProgramAccess);
+admin.use("/programs/:id/*", requireProgramAccess);
 
 admin.get("/programs/:id", async (c) => {
   const leader = c.get("leader");

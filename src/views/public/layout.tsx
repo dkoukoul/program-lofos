@@ -15,14 +15,13 @@ export const SECTION_LABELS: Record<SectionType, string> = {
 export type SectionVariant = {
   type: SectionType;
   accent: string;
-  heroEmoji?: string;
   bodyClass: string;
 };
 
-/** Ταυτότητα ανά τμήμα (accent/emoji/theme class) — πηγή αλήθειας για δημόσιες σελίδες + αρχική. */
+/** Ταυτότητα ανά τμήμα (accent/theme class) — πηγή αλήθειας για δημόσιες σελίδες + αρχική. */
 export const SECTION_VARIANTS: Record<SectionType, SectionVariant> = {
-  agele: { type: "agele", accent: "#eab308", heroEmoji: "🐺", bodyClass: "theme-agele" },
-  omada: { type: "omada", accent: "#16a34a", heroEmoji: "🧭", bodyClass: "theme-omada" },
+  agele: { type: "agele", accent: "#eab308", bodyClass: "theme-agele" },
+  omada: { type: "omada", accent: "#16a34a", bodyClass: "theme-omada" },
   koinotita: { type: "koinotita", accent: "#dc2626", bodyClass: "theme-koinotita" },
 };
 
@@ -266,11 +265,7 @@ export function SectionSchedulePage({
       isLoggedIn={isLoggedIn}
     >
       <section class="hero">
-        {variant.heroEmoji && (
-          <span class="hero-emoji" aria-hidden="true">
-            {variant.heroEmoji}
-          </span>
-        )}
+        <img class="hero-logo" src={SECTION_LOGOS[variant.type]} alt="" aria-hidden="true" />
         <h1>{program?.themeTitle || label}</h1>
         {program && <p class="period">{formatPeriod(program.periodStart, program.periodEnd)}</p>}
       </section>

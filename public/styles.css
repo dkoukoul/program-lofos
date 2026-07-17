@@ -154,9 +154,16 @@ a {
   padding: 1.5rem 0 1rem;
 }
 
-.hero-emoji {
-  font-size: 3rem;
+.hero-logo {
   display: block;
+  width: 5rem;
+  height: 5rem;
+  object-fit: contain;
+  margin: 0 auto 0.6rem;
+  padding: 0.4rem;
+  border-radius: 50%;
+  border: 3px solid var(--section-accent);
+  background: var(--bg);
 }
 
 .period {
@@ -592,9 +599,35 @@ body.admin main.admin-main {
   max-width: 40rem;
 }
 
+body.admin main.admin-main--wide {
+  max-width: 64rem;
+}
+
+body.admin .site-header {
+  flex-wrap: nowrap;
+}
+
+body.admin .site-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .admin-leader {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.admin-logout {
+  flex: 0 0 auto;
 }
 
 .button,
@@ -785,6 +818,179 @@ form.program-form {
 
 .badge-status-published {
   background: #bbf7d0;
+}
+
+/* ---- Admin: αρχική (όλες οι δράσεις) ---- */
+
+.home-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  align-items: end;
+  margin: 1rem 0;
+}
+
+.home-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.home-filters select {
+  min-height: 44px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--card-bg);
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.home-table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 4%);
+}
+
+.home-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 0.95rem;
+}
+
+.home-table th,
+.home-table td {
+  padding: 0.7rem 0.85rem;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.home-table thead th {
+  background: var(--card-bg);
+  border-bottom: 2px solid var(--border);
+  position: sticky;
+  top: 0;
+}
+
+.home-table th a {
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.home-table-actions-header {
+  text-align: right;
+}
+
+.home-table tbody tr {
+  transition: background-color 0.12s ease;
+}
+
+.home-table tbody tr:nth-child(odd) {
+  background: var(--bg);
+}
+
+.home-table tbody tr:nth-child(even) {
+  background: var(--card-bg);
+}
+
+.home-table tbody tr:not(:last-child) td {
+  border-bottom: 1px solid var(--border);
+}
+
+.home-table tbody tr:hover {
+  background: #eff6ff;
+}
+
+.home-table tbody tr.home-row--editing,
+.home-table tbody tr.home-row--editing:hover {
+  background: #dbeafe;
+}
+
+.home-row td:nth-child(4) {
+  white-space: normal;
+}
+
+.home-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.4rem;
+  white-space: nowrap;
+}
+
+.icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 1.1rem;
+  line-height: 1;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.icon-btn:hover {
+  border-color: var(--section-accent);
+  color: var(--section-accent);
+}
+
+.icon-btn-primary {
+  background: var(--section-accent);
+  border-color: var(--section-accent);
+  color: #fff;
+}
+
+.icon-btn-primary:hover {
+  color: #fff;
+  filter: brightness(1.08);
+}
+
+.quick-edit-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.quick-edit-form input[type="text"] {
+  flex: 1 1 10rem;
+  min-width: 8rem;
+}
+
+.quick-edit-form input[type="text"],
+.quick-edit-form input[type="time"] {
+  min-height: 44px;
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-size: 0.95rem;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.quick-edit-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.quick-edit-actions {
+  display: inline-flex;
+  gap: 0.4rem;
+  margin-left: auto;
 }
 
 .program-header-actions {

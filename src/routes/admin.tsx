@@ -23,6 +23,7 @@ import {
   typeDefaults,
 } from "../lib/activities";
 import { sendProgramChangedEmail, sendProgramPublishedEmail } from "../lib/notify";
+import { ActivityRow, ActivityRowEditForm, AdminHomePage, rowLabels, type HomeSortColumn, type SortDir } from "../views/admin/home";
 import { ProgramForm, ProgramsIndexPage } from "../views/admin/programs";
 import {
   ActivityFields,
@@ -133,6 +134,20 @@ async function getNotificationRecipients(sectionId: number | null): Promise<Lead
     );
 }
 
+async function getSectionsById(): Promise<Map<number, typeof sections.$inferSelect>> {
+  const all = await db.select().from(sections);
+  return new Map(all.map((s) => [s.id, s]));
+}
+
+async function loadOwnActivity(program: Program, activityId: number): Promise<Activity | null> {
+  const [activity] = await db
+    .select()
+    .from(activities)
+    .where(and(eq(activities.id, activityId), eq(activities.programId, program.id)))
+    .limit(1);
+  return activity ?? null;
+}
+
 type ParsedActivityForm = {
   date: string;
   type: Activity["type"];
@@ -192,7 +207,53 @@ async function parseActivityForm(c: { req: { formData: () => Promise<FormData> }
 
 // ---- Πρόγραμμα (ελάχιστο — χωρίς wizard, μόνο οι Δράσεις έχουν wizard) ----
 
-admin.get("/", (c) => c.redirect("/admin/programs"));
+const HOME_SORT_COLUMNS = ["date", "section", "type", "location", "status"] as const;
+
+function isHomeSortColumn(value: string): value is HomeSortColumn {
+  return (HOME_SORT_COLUMNS as readonly string[]).includes(value);
+}
+
+admin.get("/", async (c) => {
+  const leader = c.get("leader");
+  const sectionFilter = c.req.query("section") ?? "all";
+  const monthFilter = c.req.query("month") ?? "all";
+  const sortParam = c.req.query("sort") ?? "date";
+  const sort: HomeSortColumn = isHomeSortColumn(sortParam) ? sortParam : "date";
+  const dir: SortDir = c.req.query("dir") === "desc" ? "desc" : "asc";
+
+  const allSections = await db.select().from(sections);
+  const sectionsById = new Map(allSections.map((s) => [s.id, s]));
+
+  const visiblePrograms =
+    leader.role === "system_staff"
+      ? await db.select().from(programs)
+      : await db.select().from(programs).where(eq(programs.sectionId, leader.sectionId!));
+
+  const programsById = new Map(visiblePrograms.map((p) => [p.id, p]));
+  const programIds = visiblePrograms.map((p) => p.id);
+
+  const visibleActivities =
+    programIds.length > 0
+      ? await db.select().from(activities).where(inArray(activities.programId, programIds))
+      : [];
+
+  const rows = visibleActivities.map((activity) => ({
+    activity,
+    program: programsById.get(activity.programId)!,
+  }));
+
+  return c.html(
+    <AdminHomePage
+      leader={leader}
+      rows={rows}
+      sectionsById={sectionsById}
+      sectionFilter={sectionFilter}
+      monthFilter={monthFilter}
+      sort={sort}
+      dir={dir}
+    />,
+  );
+});
 
 admin.get("/programs", async (c) => {
   const leader = c.get("leader");
@@ -589,6 +650,85 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
   }
 
   return c.redirect(`/admin/programs/${program.id}`);
+});
+
+// ---- Γρήγορη επεξεργασία (inline, μόνο τόπος/ώρα) από την αρχική σελίδα (/admin) ----
+
+admin.get("/programs/:id/activities/:activityId/row", async (c) => {
+  const program = c.get("program");
+  const activityId = Number(c.req.param("activityId"));
+  const activity = await loadOwnActivity(program, activityId);
+  if (!activity) return c.notFound();
+
+  const sectionsById = await getSectionsById();
+  const row = { activity, program };
+  return c.html(<ActivityRow row={row} {...rowLabels(row, sectionsById)} />);
+});
+
+admin.get("/programs/:id/activities/:activityId/quick-edit", async (c) => {
+  const program = c.get("program");
+  const activityId = Number(c.req.param("activityId"));
+  const activity = await loadOwnActivity(program, activityId);
+  if (!activity) return c.notFound();
+
+  const sectionsById = await getSectionsById();
+  const row = { activity, program };
+  if (activity.type === "no_activity") {
+    return c.html(<ActivityRow row={row} {...rowLabels(row, sectionsById)} />);
+  }
+  return c.html(<ActivityRowEditForm row={row} {...rowLabels(row, sectionsById)} />);
+});
+
+admin.post("/programs/:id/activities/:activityId/quick-edit", async (c) => {
+  const program = c.get("program");
+  const activityId = Number(c.req.param("activityId"));
+  const before = await loadOwnActivity(program, activityId);
+  if (!before) return c.notFound();
+
+  const sectionsById = await getSectionsById();
+
+  if (before.type !== "no_activity") {
+    const formData = await c.req.formData();
+    const location = str(formData, "location").slice(0, 200);
+    const startTime = str(formData, "startTime");
+    const endTime = str(formData, "endTime");
+    const dateStr = toDateInputValue(before.date);
+
+    const after = {
+      date: before.date,
+      location: location || null,
+      startsAt: combineDateTime(dateStr, startTime),
+      endsAt: combineDateTime(dateStr, endTime),
+      cost: before.cost,
+      whatToBring: before.whatToBring,
+    };
+
+    const changedFields =
+      program.status === "published"
+        ? diffChangedFields(before, after, before.changedAfterPublishFields ?? [])
+        : (before.changedAfterPublishFields ?? []);
+
+    await db
+      .update(activities)
+      .set({
+        location: after.location,
+        startsAt: after.startsAt,
+        endsAt: after.endsAt,
+        changedAfterPublishFields: changedFields,
+        updatedAt: new Date(),
+      })
+      .where(eq(activities.id, activityId));
+
+    const beforeChangedCount = (before.changedAfterPublishFields ?? []).length;
+    if (program.status === "published" && changedFields.length > beforeChangedCount) {
+      const recipients = await getNotificationRecipients(program.sectionId);
+      await sendProgramChangedEmail(recipients, program, { ...before, ...after } as Activity);
+    }
+  }
+
+  const updated = (await loadOwnActivity(program, activityId))!;
+  const row = { activity: updated, program };
+  return c.html(<ActivityRow row={row} {...rowLabels(row, sectionsById)} />);
 });
 
 admin.post("/programs/:id/activities/:activityId/delete", async (c) => {

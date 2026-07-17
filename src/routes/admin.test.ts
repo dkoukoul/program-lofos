@@ -303,3 +303,250 @@ describe("Αλλαγές μετά τη δημοσίευση", () => {
     expect(updated?.changedAfterPublishFields).toEqual(["location"]);
   });
 });
+
+describe("Αρχική διαχειριστικού (/admin)", () => {
+  test("section_leader βλέπει μόνο δράσεις του δικού του τμήματος", async () => {
+    const sectionA = await makeSection("agele");
+    const sectionB = await makeSection("omada");
+    const programA = await makeProgram(sectionA.id);
+    const programB = await makeProgram(sectionB.id);
+    const systemProgram = await makeProgram(null);
+
+    await db.insert(activities).values([
+      {
+        programId: programA.id,
+        type: "typical",
+        date: new Date(2026, 6, 5),
+        location: "ΜΟΝΟ-ΑΓΕΛΗ",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        programId: programB.id,
+        type: "typical",
+        date: new Date(2026, 6, 6),
+        location: "ΜΟΝΟ-ΟΜΑΔΑ",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        programId: systemProgram.id,
+        isSystemWide: true,
+        type: "typical",
+        date: new Date(2026, 6, 7),
+        location: "ΜΟΝΟ-ΣΥΣΤΗΜΑ",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const leader = await makeLeader({ role: "section_leader", sectionId: sectionA.id });
+    const cookie = await cookieFor(leader);
+
+    const res = await app.request("/admin", { headers: { cookie } });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("ΜΟΝΟ-ΑΓΕΛΗ");
+    expect(html).not.toContain("ΜΟΝΟ-ΟΜΑΔΑ");
+    expect(html).not.toContain("ΜΟΝΟ-ΣΥΣΤΗΜΑ");
+    // section_leader δεν έχει επιλογή φίλτρου τμήματος (είναι ήδη περιορισμένος).
+    expect(html).not.toContain('name="section"');
+  });
+
+  test("system_staff βλέπει δράσεις όλων των τμημάτων και του συστήματος, με φίλτρο τμήματος", async () => {
+    const sectionA = await makeSection("agele");
+    const sectionC = await makeSection("koinotita");
+    const programA = await makeProgram(sectionA.id);
+    const programC = await makeProgram(sectionC.id);
+
+    await db.insert(activities).values([
+      {
+        programId: programA.id,
+        type: "typical",
+        date: new Date(2026, 6, 10),
+        location: "STAFF-ΑΓΕΛΗ",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        programId: programC.id,
+        type: "typical",
+        date: new Date(2026, 6, 11),
+        location: "STAFF-ΚΟΙΝΟΤΗΤΑ",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const cookie = await cookieFor(staff);
+
+    const all = await app.request("/admin", { headers: { cookie } });
+    const allHtml = await all.text();
+    expect(allHtml).toContain("STAFF-ΑΓΕΛΗ");
+    expect(allHtml).toContain("STAFF-ΚΟΙΝΟΤΗΤΑ");
+
+    const filtered = await app.request(`/admin?section=${sectionA.type}`, { headers: { cookie } });
+    const filteredHtml = await filtered.text();
+    expect(filteredHtml).toContain("STAFF-ΑΓΕΛΗ");
+    expect(filteredHtml).not.toContain("STAFF-ΚΟΙΝΟΤΗΤΑ");
+  });
+
+  test("ταξινόμηση κατά ημερομηνία σέβεται dir=desc", async () => {
+    const section = await makeSection("agele");
+    const program = await makeProgram(section.id);
+
+    await db.insert(activities).values([
+      {
+        programId: program.id,
+        type: "typical",
+        date: new Date(2026, 6, 1),
+        location: "SORT-ΠΡΩΤΗ",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        programId: program.id,
+        type: "typical",
+        date: new Date(2026, 6, 28),
+        location: "SORT-ΤΕΛΕΥΤΑΙΑ",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const cookie = await cookieFor(leader);
+
+    const res = await app.request("/admin?sort=date&dir=desc", { headers: { cookie } });
+    const html = await res.text();
+    const laterIdx = html.indexOf("SORT-ΤΕΛΕΥΤΑΙΑ");
+    const earlierIdx = html.indexOf("SORT-ΠΡΩΤΗ");
+    expect(laterIdx).toBeGreaterThan(-1);
+    expect(earlierIdx).toBeGreaterThan(-1);
+    expect(laterIdx).toBeLessThan(earlierIdx);
+  });
+
+  test("χωρίς session -> redirect στο login", async () => {
+    const res = await app.request("/admin");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/auth/login");
+  });
+});
+
+describe("Γρήγορη επεξεργασία (quick-edit) από την αρχική", () => {
+  async function makeActivity(programId: number, overrides: Partial<Record<string, unknown>> = {}) {
+    const [activity] = await db
+      .insert(activities)
+      .values({
+        programId,
+        type: "typical",
+        date: new Date(2026, 6, 5),
+        location: "Λόφος",
+        startsAt: new Date(2026, 6, 5, 11, 0),
+        endsAt: new Date(2026, 6, 5, 13, 0),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        ...overrides,
+      })
+      .returning();
+    return activity!;
+  }
+
+  test("GET quick-edit επιστρέφει inline φόρμα με τόπο/ώρα", async () => {
+    const section = await makeSection("agele");
+    const program = await makeProgram(section.id);
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const cookie = await cookieFor(leader);
+    const activity = await makeActivity(program.id);
+
+    const res = await app.request(`/admin/programs/${program.id}/activities/${activity.id}/quick-edit`, {
+      headers: { cookie },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain('name="location"');
+    expect(html).toContain('name="startTime"');
+    expect(html).toContain("Λόφος");
+  });
+
+  test("POST quick-edit ενημερώνει τόπο/ώρα χωρίς να αλλάζει τύπο/ημερομηνία", async () => {
+    const section = await makeSection("agele");
+    const program = await makeProgram(section.id);
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const cookie = await cookieFor(leader);
+    const activity = await makeActivity(program.id);
+
+    const res = await app.request(`/admin/programs/${program.id}/activities/${activity.id}/quick-edit`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ location: "Ζωολογικός Κήπος", startTime: "10:00", endTime: "12:30" }),
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("Ζωολογικός Κήπος");
+
+    const [updated] = await db.select().from(activities).where(eq(activities.id, activity.id));
+    expect(updated?.location).toBe("Ζωολογικός Κήπος");
+    expect(updated?.startsAt?.getHours()).toBe(10);
+    expect(updated?.endsAt?.getHours()).toBe(12);
+    expect(updated?.type).toBe("typical");
+    expect(updated?.date.getDate()).toBe(5);
+  });
+
+  test("POST quick-edit σε δημοσιευμένο πρόγραμμα μαρκάρει τα αλλαγμένα πεδία", async () => {
+    const section = await makeSection("omada");
+    const program = await makeProgram(section.id);
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const cookie = await cookieFor(leader);
+    const activity = await makeActivity(program.id);
+
+    await db.update(programs).set({ status: "published", publishedAt: new Date() }).where(eq(programs.id, program.id));
+
+    await app.request(`/admin/programs/${program.id}/activities/${activity.id}/quick-edit`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ location: "Νέος τόπος", startTime: "11:00", endTime: "13:00" }),
+    });
+
+    const [updated] = await db.select().from(activities).where(eq(activities.id, activity.id));
+    expect(updated?.changedAfterPublishFields).toEqual(["location"]);
+  });
+
+  test("δράση χωρίς-δράση (no_activity) δεν αλλάζει από quick-edit POST", async () => {
+    const section = await makeSection("koinotita");
+    const program = await makeProgram(section.id);
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const cookie = await cookieFor(leader);
+    const activity = await makeActivity(program.id, {
+      type: "no_activity",
+      location: null,
+      startsAt: null,
+      endsAt: null,
+    });
+
+    const res = await app.request(`/admin/programs/${program.id}/activities/${activity.id}/quick-edit`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ location: "Θα έπρεπε να αγνοηθεί" }),
+    });
+    expect(res.status).toBe(200);
+
+    const [unchanged] = await db.select().from(activities).where(eq(activities.id, activity.id));
+    expect(unchanged?.location).toBeNull();
+  });
+
+  test("section_leader άλλου τμήματος μπλοκάρεται (403)", async () => {
+    const sectionA = await makeSection("agele");
+    const sectionB = await makeSection("omada");
+    const programA = await makeProgram(sectionA.id);
+    const activity = await makeActivity(programA.id);
+    const otherLeader = await makeLeader({ role: "section_leader", sectionId: sectionB.id });
+    const cookie = await cookieFor(otherLeader);
+
+    const res = await app.request(`/admin/programs/${programA.id}/activities/${activity.id}/quick-edit`, {
+      headers: { cookie },
+    });
+    expect(res.status).toBe(403);
+  });
+});

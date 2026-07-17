@@ -164,11 +164,6 @@ a {
   margin-top: 0;
 }
 
-.section-link {
-  font-size: 0.9rem;
-  white-space: nowrap;
-}
-
 .empty-state {
   color: var(--muted);
   font-style: italic;
@@ -177,14 +172,14 @@ a {
 /* ---- Home: κάρτες τμημάτων (3D flip, ratio τραπουλόχαρτου) ---- */
 
 body.home main {
-  max-width: 68rem;
+  max-width: 78rem;
 }
 
 .section-cards {
   display: grid;
   grid-template-columns: 1fr;
   justify-items: center;
-  gap: 1.5rem;
+  gap: 1.75rem;
   margin-top: 1.5rem;
 }
 
@@ -199,7 +194,7 @@ body.home main {
 .play-card {
   position: relative;
   width: 100%;
-  max-width: 19rem;
+  max-width: 23rem;
   aspect-ratio: 5 / 7;
   perspective: 1600px;
 }
@@ -355,10 +350,14 @@ body.home main {
 
 /* Κουμπιά flip. */
 .flip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--card-accent, var(--section-accent));
   border-radius: 0.6rem;
   background: #fff;
   color: var(--card-accent, var(--section-accent));
+  text-decoration: none;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -379,9 +378,10 @@ body.home main {
 }
 
 .flip-btn--back {
-  min-height: 36px;
-  padding: 0.25rem 0.6rem;
-  font-size: 0.8rem;
+  min-height: 44px;
+  padding: 0.5rem 0.9rem;
+  font-size: 0.9rem;
+  font-weight: 600;
 }
 
 /* Πίσω όψη: πλήρες πρόγραμμα με κύλιση εντός της κάρτας. */
@@ -417,10 +417,6 @@ body.home main {
 
 .card-full-list .badge {
   font-size: 0.72rem;
-}
-
-.section-link--back {
-  font-size: 0.8rem;
 }
 
 /* Στατική κάρτα (τμήμα χωρίς πρόγραμμα/δράσεις) — ίδιο κουτί, χωρίς flip. */

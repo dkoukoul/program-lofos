@@ -91,7 +91,7 @@ function SectionCard({ block }: { block: SectionBlock }) {
               {!program ? "Δεν υπάρχει ακόμα δημοσιευμένο πρόγραμμα." : "Το πρόγραμμα δεν έχει ακόμα δράσεις."}
             </p>
           </div>
-          <a href={`/${type}`} class="section-link">
+          <a href={`/${type}`} class="flip-btn flip-btn--primary card-cta">
             Σελίδα τμήματος →
           </a>
         </div>
@@ -119,9 +119,9 @@ function SectionCard({ block }: { block: SectionBlock }) {
               <img class="card-emoji" src={SECTION_LOGOS[type]} alt="" aria-hidden="true" />
               <h2 class="card-head-title">{label}</h2>
             </div>
-            <button type="button" class="flip-btn flip-btn--back" aria-label={`Επιστροφή στην επόμενη δράση για ${label}`}>
-              ⟲ Πίσω
-            </button>
+            <a href={`/${type}`} class="flip-btn flip-btn--back">
+              Περισσότερα ↗
+            </a>
           </div>
           <p class="period card-back-period">{formatPeriod(program.periodStart, program.periodEnd)}</p>
           <div class="card-scroll">
@@ -131,9 +131,9 @@ function SectionCard({ block }: { block: SectionBlock }) {
               ))}
             </ul>
           </div>
-          <a href={`/${type}`} class="section-link section-link--back">
-            Άνοιγμα σελίδας ↗
-          </a>
+          <button type="button" class="flip-btn flip-btn--primary card-cta" aria-label={`Επιστροφή στην επόμενη δράση για ${label}`}>
+            ⟲ Πίσω
+          </button>
         </div>
       </div>
     </article>

@@ -265,6 +265,13 @@ export function ActivityFormPage({
         actionUrl={actionUrl}
         participantsAvailable={participantsAvailable}
       />
+      {editingActivityId && (
+        <form method="post" action={`/admin/programs/${program.id}/activities/${editingActivityId}/delete`}>
+          <button type="submit" class="link-button link-button--danger" onclick="return confirm('Διαγραφή δράσης;');">
+            Διαγραφή δράσης
+          </button>
+        </form>
+      )}
     </AdminLayout>
   );
 }

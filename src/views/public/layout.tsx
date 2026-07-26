@@ -61,6 +61,16 @@ export function googleMapsUrl(lat: number, lng: number): string {
   return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
 }
 
+/** Δημόσιο, μη μαντεύσιμο .ics URL τμήματος (§9 architecture doc) — απόλυτο, βάσει BASE_URL. */
+export function icalFeedUrl(section: Pick<typeof sections.$inferSelect, "id" | "icalPublicToken">): string {
+  return `${process.env.BASE_URL ?? ""}/ical/${section.id}/${section.icalPublicToken}.ics`;
+}
+
+/** Ίδιο URL με πρωτόκολλο webcal:// — ανοίγει απευθείας τη ροή "εγγραφή" σε Ημερολόγιο στα περισσότερα κινητά/desktop clients. */
+export function icalWebcalUrl(section: Pick<typeof sections.$inferSelect, "id" | "icalPublicToken">): string {
+  return icalFeedUrl(section).replace(/^https?:\/\//, "webcal://");
+}
+
 const timeFormatter = new Intl.DateTimeFormat("el-GR", { hour: "2-digit", minute: "2-digit", hour12: false });
 const weekdayFormatter = new Intl.DateTimeFormat("el-GR", { weekday: "long" });
 const shortWeekdayFormatter = new Intl.DateTimeFormat("el-GR", { weekday: "short" });
@@ -293,6 +303,19 @@ export function SectionSchedulePage({
         <img class="hero-logo" src={SECTION_LOGOS[variant.type]} alt="" aria-hidden="true" />
         <h1>{program?.themeTitle || label}</h1>
         {program && <p class="period">{formatPeriod(program.periodStart, program.periodEnd)}</p>}
+      </section>
+
+      <section class="ical-subscribe">
+        <a class="btn-ical" href={icalWebcalUrl(section)}>
+          📅 Πρόσθεσε στο ημερολόγιο του κινητού σου
+        </a>
+        <p class="ical-subscribe-hint">
+          Το πρόγραμμα της {label} ενημερώνεται αυτόματα στο ημερολόγιό σου. Αν το κουμπί δεν ανοίξει το
+          ημερολόγιο, αντέγραψε το link:{" "}
+          <a href={icalFeedUrl(section)} class="ical-subscribe-link">
+            {icalFeedUrl(section)}
+          </a>
+        </p>
       </section>
 
       {!program ? (

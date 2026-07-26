@@ -108,3 +108,44 @@ export async function getSectionSchedule(sectionId: number, now: Date = new Date
     activities: mergeAndSortActivities(sectionActivities, systemActivities),
   };
 }
+
+/**
+ * Όλες οι δράσεις (merged με Δράσεις Συστήματος, ανά περίοδο) απ' όλα τα
+ * δημοσιευμένα προγράμματα ενός τμήματος — ιστορικά + τρέχοντα + μελλοντικά.
+ * Χρησιμοποιείται από το iCal feed (§9 architecture doc), που πρέπει να
+ * αντανακλά όλες τις δημοσιευμένες δράσεις, όχι μόνο την τρέχουσα περίοδο.
+ */
+export async function getPublishedSectionActivities(sectionId: number): Promise<ActivityRow[]> {
+  const sectionPrograms = await db
+    .select()
+    .from(programs)
+    .where(and(eq(programs.sectionId, sectionId), eq(programs.status, "published")));
+
+  if (sectionPrograms.length === 0) return [];
+
+  const sectionProgramIds = sectionPrograms.map((program) => program.id);
+  const sectionActivities = await db
+    .select()
+    .from(activities)
+    .where(inArray(activities.programId, sectionProgramIds));
+
+  const systemPrograms = await db
+    .select()
+    .from(programs)
+    .where(and(isNull(programs.sectionId), eq(programs.status, "published")));
+
+  const systemProgramIds = systemPrograms.map((program) => program.id);
+  const systemActivities = systemProgramIds.length
+    ? await db.select().from(activities).where(inArray(activities.programId, systemProgramIds))
+    : [];
+
+  const merged = sectionPrograms.flatMap((program) => {
+    const periodSectionActivities = sectionActivities.filter((activity) => activity.programId === program.id);
+    const periodSystemActivities = systemActivities.filter(
+      (activity) => activity.date >= program.periodStart && activity.date <= program.periodEnd,
+    );
+    return mergeAndSortActivities(periodSectionActivities, periodSystemActivities);
+  });
+
+  return merged.sort((a, b) => a.date.getTime() - b.date.getTime());
+}

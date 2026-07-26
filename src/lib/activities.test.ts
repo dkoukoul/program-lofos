@@ -87,6 +87,8 @@ describe("diffChangedFields", () => {
   const base = {
     date: new Date(2026, 6, 12),
     location: "Λόφος",
+    locationLat: null,
+    locationLng: null,
     startsAt: new Date(2026, 6, 12, 11, 0),
     endsAt: new Date(2026, 6, 12, 13, 0),
     cost: null,
@@ -110,5 +112,10 @@ describe("diffChangedFields", () => {
   test("δεν διπλασιάζει αν το ίδιο πεδίο αλλάζει ξανά", () => {
     const after = { ...base, location: "Πλατεία" };
     expect(diffChangedFields(base, after, ["location"])).toEqual(["location"]);
+  });
+
+  test("εντοπίζει αλλαγή συντεταγμένων ακόμα κι όταν το κείμενο τοποθεσίας μένει ίδιο", () => {
+    const after = { ...base, locationLat: 35.3387, locationLng: 25.1442 };
+    expect(diffChangedFields(base, after).sort()).toEqual(["locationLat", "locationLng"].sort());
   });
 });

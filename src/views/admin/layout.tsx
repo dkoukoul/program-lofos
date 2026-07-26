@@ -4,10 +4,11 @@ type AdminLayoutProps = {
   title: string;
   leader: Leader;
   wide?: boolean;
+  extraHead?: unknown;
   children: unknown;
 };
 
-export function AdminLayout({ title, leader, wide, children }: AdminLayoutProps) {
+export function AdminLayout({ title, leader, wide, extraHead, children }: AdminLayoutProps) {
   return (
     <html lang="el">
       <head>
@@ -16,6 +17,7 @@ export function AdminLayout({ title, leader, wide, children }: AdminLayoutProps)
         <title>{title} — program.lofos.gr</title>
         <link rel="stylesheet" href="/public/styles.css" />
         <script src="/public/vendor/htmx.min.js" defer />
+        {extraHead}
       </head>
       <body class="admin">
         <header class="site-header">
@@ -29,6 +31,9 @@ export function AdminLayout({ title, leader, wide, children }: AdminLayoutProps)
             4ο Σύστημα — Διαχειριστικό
           </a>
           <span class="admin-leader">{leader.name}</span>
+          <a class="icon-btn admin-help-link" href="/admin/help" title="Οδηγός χρήσης" aria-label="Οδηγός χρήσης">
+            ❓
+          </a>
           <form method="post" action="/auth/logout" class="admin-logout">
             <button type="submit" class="button">
               Αποσύνδεση

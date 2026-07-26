@@ -24,6 +24,7 @@ import {
 } from "../lib/activities";
 import { sendProgramChangedEmail, sendProgramPublishedEmail } from "../lib/notify";
 import { ActivityRow, ActivityRowEditForm, AdminHomePage, rowLabels, type HomeSortColumn, type SortDir } from "../views/admin/home";
+import { HelpPage } from "../views/admin/help";
 import { ProgramForm, ProgramsIndexPage } from "../views/admin/programs";
 import {
   ActivityFields,
@@ -152,6 +153,8 @@ type ParsedActivityForm = {
   date: string;
   type: Activity["type"];
   location: string;
+  locationLat: number | null;
+  locationLng: number | null;
   startTime: string;
   endTime: string;
   cost: string;
@@ -165,6 +168,24 @@ const controlFieldsSchema = z.object({
   type: z.enum(["typical", "day_trip", "multi_day", "other", "no_activity"]),
 });
 
+// Οι συντεταγμένες γεμίζουν από το map picker (hidden inputs, βλ. views/admin/wizard/form.tsx) —
+// ένα από τα δύο κενό σημαίνει bug/παραποίηση στο client, όχι έγκυρη μερική επιλογή.
+const coordsSchema = z
+  .object({ locationLat: z.string(), locationLng: z.string() })
+  .transform(({ locationLat, locationLng }) => ({
+    locationLat: locationLat === "" ? null : Number(locationLat),
+    locationLng: locationLng === "" ? null : Number(locationLng),
+  }))
+  .refine((v) => (v.locationLat === null) === (v.locationLng === null), {
+    message: "Χρειάζονται και οι δύο συντεταγμένες τοποθεσίας (πλάτος & μήκος).",
+  })
+  .refine((v) => v.locationLat === null || (Number.isFinite(v.locationLat) && Math.abs(v.locationLat) <= 90), {
+    message: "Μη έγκυρο γεωγραφικό πλάτος τοποθεσίας.",
+  })
+  .refine((v) => v.locationLng === null || (Number.isFinite(v.locationLng) && Math.abs(v.locationLng) <= 180), {
+    message: "Μη έγκυρο γεωγραφικό μήκος τοποθεσίας.",
+  });
+
 function str(formData: FormData, name: string): string {
   const value = formData.get(name);
   return typeof value === "string" ? value.trim() : "";
@@ -177,6 +198,14 @@ async function parseActivityForm(c: { req: { formData: () => Promise<FormData> }
   const parsed = controlFieldsSchema.safeParse({ date: str(formData, "date"), type: str(formData, "type") });
   if (!parsed.success) {
     return { success: false, error: "Δώσε έγκυρη ημερομηνία και τύπο δράσης." };
+  }
+
+  const coordsParsed = coordsSchema.safeParse({
+    locationLat: str(formData, "locationLat"),
+    locationLng: str(formData, "locationLng"),
+  });
+  if (!coordsParsed.success) {
+    return { success: false, error: coordsParsed.error.issues[0]?.message ?? "Μη έγκυρες συντεταγμένες τοποθεσίας." };
   }
 
   const customFields: CustomFieldValue[] = [0, 1, 2].map((i) => ({
@@ -195,6 +224,8 @@ async function parseActivityForm(c: { req: { formData: () => Promise<FormData> }
       date: parsed.data.date,
       type: parsed.data.type,
       location: str(formData, "location").slice(0, 200),
+      locationLat: coordsParsed.data.locationLat,
+      locationLng: coordsParsed.data.locationLng,
       startTime: str(formData, "startTime"),
       endTime: str(formData, "endTime"),
       cost: str(formData, "cost").slice(0, 100),
@@ -253,6 +284,11 @@ admin.get("/", async (c) => {
       dir={dir}
     />,
   );
+});
+
+admin.get("/help", async (c) => {
+  const leader = c.get("leader");
+  return c.html(<HelpPage leader={leader} />);
 });
 
 admin.get("/programs", async (c) => {
@@ -452,6 +488,8 @@ admin.post("/programs/:id/activities", async (c) => {
           date,
           type: data.type,
           location: data.location,
+          locationLat: data.locationLat,
+          locationLng: data.locationLng,
           startTime: data.startTime,
           endTime: data.endTime,
           cost: data.cost,
@@ -476,6 +514,8 @@ admin.post("/programs/:id/activities", async (c) => {
       type: data.type,
       date,
       location: data.type === "no_activity" ? null : data.location || null,
+      locationLat: data.type === "no_activity" ? null : data.locationLat,
+      locationLng: data.type === "no_activity" ? null : data.locationLng,
       startsAt: data.type === "no_activity" ? null : combineDateTime(data.date, data.startTime),
       endsAt: data.type === "no_activity" ? null : combineDateTime(data.date, data.endTime),
       cost: data.type === "no_activity" ? null : data.cost || null,
@@ -615,6 +655,8 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
           date,
           type: data.type,
           location: data.location,
+          locationLat: data.locationLat,
+          locationLng: data.locationLng,
           startTime: data.startTime,
           endTime: data.endTime,
           cost: data.cost,
@@ -635,6 +677,8 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
   const after = {
     date,
     location: data.type === "no_activity" ? null : data.location || null,
+    locationLat: data.type === "no_activity" ? null : data.locationLat,
+    locationLng: data.type === "no_activity" ? null : data.locationLng,
     startsAt: data.type === "no_activity" ? null : combineDateTime(data.date, data.startTime),
     endsAt: data.type === "no_activity" ? null : combineDateTime(data.date, data.endTime),
     cost: data.type === "no_activity" ? null : data.cost || null,
@@ -668,7 +712,7 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
   return c.redirect(`/admin/programs/${program.id}`);
 });
 
-// ---- Γρήγορη επεξεργασία (inline, μόνο τόπος/ώρα) από την αρχική σελίδα (/admin) ----
+// ---- Γρήγορη επεξεργασία (inline, μόνο τοποθεσία/ώρα) από την αρχική σελίδα (/admin) ----
 
 admin.get("/programs/:id/activities/:activityId/row", async (c) => {
   const program = c.get("program");
@@ -709,10 +753,16 @@ admin.post("/programs/:id/activities/:activityId/quick-edit", async (c) => {
     const startTime = str(formData, "startTime");
     const endTime = str(formData, "endTime");
     const dateStr = toDateInputValue(before.date);
+    // Η γρήγορη επεξεργασία δεν έχει map picker (μόνο πεδίο κειμένου) — αν αλλάξει το κείμενο
+    // τοποθεσίας εδώ, οι συντεταγμένες του προηγούμενου σημείου δεν αντιστοιχούν πια σε αυτό
+    // και καθαρίζονται· ο βαθμοφόρος μπορεί να ξαναδιαλέξει σημείο μέσω του πλήρους wizard.
+    const locationChanged = (location || null) !== before.location;
 
     const after = {
       date: before.date,
       location: location || null,
+      locationLat: locationChanged ? null : before.locationLat,
+      locationLng: locationChanged ? null : before.locationLng,
       startsAt: combineDateTime(dateStr, startTime),
       endsAt: combineDateTime(dateStr, endTime),
       cost: before.cost,
@@ -728,6 +778,8 @@ admin.post("/programs/:id/activities/:activityId/quick-edit", async (c) => {
       .update(activities)
       .set({
         location: after.location,
+        locationLat: after.locationLat,
+        locationLng: after.locationLng,
         startsAt: after.startsAt,
         endsAt: after.endsAt,
         changedAfterPublishFields: changedFields,

@@ -1,7 +1,8 @@
 import type { Activity, Leader, Program } from "../../../db/schema";
-import { ACTIVITY_TYPE_INFO, formatDateNumeric } from "../../public/layout";
+import { ACTIVITY_TYPE_INFO, formatDateNumeric, googleMapsUrl } from "../../public/layout";
 import { typeDefaults, type ActivityTypeDefaults } from "../../../lib/activities";
 import { AdminLayout } from "../layout";
+import { InfoTip } from "../info-tip";
 import { OverlapWarning } from "./overlap-warning";
 
 type ActivityType = Activity["type"];
@@ -26,6 +27,8 @@ export type ActivityFormValues = {
   date: Date;
   type: ActivityType;
   location: string;
+  locationLat: number | null;
+  locationLng: number | null;
   startTime: string;
   endTime: string;
   cost: string;
@@ -42,6 +45,8 @@ export function defaultFormValues(type: ActivityType, date: Date): ActivityFormV
     date,
     type,
     location: defaults.location ?? "",
+    locationLat: null,
+    locationLng: null,
     startTime: defaults.startTime ?? "",
     endTime: defaults.endTime ?? "",
     cost: "",
@@ -60,6 +65,8 @@ export function formValuesFromActivity(
     date: activity.date,
     type: activity.type,
     location: activity.location ?? "",
+    locationLat: activity.locationLat,
+    locationLng: activity.locationLng,
     startTime: activity.startsAt ? toTimeInputValue(activity.startsAt) : "",
     endTime: activity.endsAt ? toTimeInputValue(activity.endsAt) : "",
     cost: activity.cost ?? "",
@@ -90,8 +97,28 @@ function ActivityFields({
   return (
     <>
       <section class="wizard-step">
-        <label for="location">Τόπος</label>
+        <label for="location">Τοποθεσία</label>
         <input type="text" id="location" name="location" value={values.location} maxlength={200} />
+
+        <input type="hidden" id="locationLat" name="locationLat" value={values.locationLat ?? ""} />
+        <input type="hidden" id="locationLng" name="locationLng" value={values.locationLng ?? ""} />
+        <div class="location-picker">
+          <button type="button" class="button location-picker-toggle" id="location-picker-toggle">
+            📍 Επιλογή στον χάρτη
+          </button>
+          <span id="location-picker-status" class="location-picker-status">
+            {values.locationLat != null && values.locationLng != null && (
+              <>
+                Επιλεγμένο σημείο —{" "}
+                <a href={googleMapsUrl(values.locationLat, values.locationLng)} target="_blank" rel="noopener noreferrer">
+                  🗺️ άνοιγμα στο Google Maps
+                </a>{" "}
+                · <button type="button" data-location-clear class="link-button">Καθαρισμός</button>
+              </>
+            )}
+          </span>
+          <div id="location-picker-map" class="location-picker-map" hidden={values.locationLat == null}></div>
+        </div>
 
         {values.type === "multi_day" ? (
           <>
@@ -132,6 +159,7 @@ function ActivityFields({
 
       <details class="wizard-step wizard-step--optional">
         <summary>Δυναμικά πεδία</summary>
+        <InfoTip text="Έως 3 προαιρετικά ζεύγη τίτλος/περιγραφή, για ό,τι δεν καλύπτεται από κόστος/τι-να-κρατάνε (π.χ. οδηγίες, σημείο συνάντησης). Κενά πεδία αγνοούνται στην αποθήκευση." />
         {values.customFields.map((field, index) => (
           <fieldset class="custom-field">
             <label for={`customFieldTitle${index}`}>Τίτλος</label>
@@ -171,6 +199,7 @@ export function ActivityFormBody({
     <form method="post" action={actionUrl} class="activity-form">
       <section class="wizard-step">
         <label for="date">Ημερομηνία</label>
+        <InfoTip text="Τα κουμπιά από κάτω προτείνουν τις επόμενες διαθέσιμες Κυριακές, αλλά μπορείς πάντα να διαλέξεις οποιαδήποτε άλλη ημέρα από το ημερολόγιο. Αν υπάρχει ήδη δράση εκείνη τη μέρα, θα εμφανιστεί προειδοποίηση." />
         {dateChips.length > 0 && (
           <div class="date-chips">
             {dateChips.map((chip) => (
@@ -202,6 +231,7 @@ export function ActivityFormBody({
         </div>
 
         <label for="type">Τύπος δράσης</label>
+        <InfoTip text="Κάθε τύπος προσυμπληρώνει ό,τι συνηθίζεται (π.χ. η Τυπική βάζει αυτόματα ώρα/τόπο) — όλα τα πεδία μένουν ελεύθερα επεξεργάσιμα. Δεν υπάρχει ξεχωριστή επιλογή «Δράση Συστήματος»: καθορίζεται αυτόματα από το αν βρίσκεσαι στο πρόγραμμα «Σύστημα»." />
         <select
           id="type"
           name="type"
@@ -230,6 +260,100 @@ export function ActivityFormBody({
   );
 }
 
+/**
+ * Χειρισμός του optional map picker (Leaflet + OpenStreetMap tiles, vendored χωρίς API key —
+ * βλ. docs/decisions.md). Ζει ΕΚΤΟΣ του #activity-fields (που αντικαθίσταται μέσω htmx σε κάθε
+ * αλλαγή τύπου δράσης), άρα τρέχει μία φορά ανά φόρτωση σελίδας· ακούει `htmx:afterSwap` για να
+ * ξαναρχικοποιήσει το map instance μετά από κάθε τέτοιο swap (το παλιό DOM node καταστρέφεται).
+ */
+const LOCATION_PICKER_SCRIPT = `(function(){
+  var DEFAULT_CENTER=[35.3387,25.1442];
+  var map=null, marker=null;
+  function els(){
+    return {
+      lat: document.getElementById('locationLat'),
+      lng: document.getElementById('locationLng'),
+      mapDiv: document.getElementById('location-picker-map'),
+      status: document.getElementById('location-picker-status')
+    };
+  }
+  function renderStatus(lat,lng){
+    var e=els();
+    if(!e.status) return;
+    if(lat==null||lng==null){ e.status.innerHTML=''; return; }
+    var url='https://www.google.com/maps/search/?api=1&query='+lat+','+lng;
+    e.status.innerHTML='Επιλεγμένο σημείο — <a href="'+url+'" target="_blank" rel="noopener noreferrer">🗺️ άνοιγμα στο Google Maps</a> · <button type="button" data-location-clear class="link-button">Καθαρισμός</button>';
+  }
+  function setCoords(lat,lng){
+    var e=els();
+    if(e.lat) e.lat.value=lat;
+    if(e.lng) e.lng.value=lng;
+    renderStatus(lat,lng);
+  }
+  function clearCoords(){
+    var e=els();
+    if(e.lat) e.lat.value='';
+    if(e.lng) e.lng.value='';
+    if(marker){ marker.remove(); marker=null; }
+    renderStatus(null,null);
+  }
+  function ensureMap(){
+    var e=els();
+    if(!e.mapDiv||map||typeof L==='undefined') return;
+    var initialLat=e.lat&&e.lat.value?parseFloat(e.lat.value):null;
+    var initialLng=e.lng&&e.lng.value?parseFloat(e.lng.value):null;
+    var center=(initialLat!=null&&initialLng!=null)?[initialLat,initialLng]:DEFAULT_CENTER;
+    map=L.map(e.mapDiv).setView(center, initialLat!=null?15:13);
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{
+      attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      maxZoom:19
+    }).addTo(map);
+    if(initialLat!=null&&initialLng!=null){ marker=L.marker(center).addTo(map); }
+    map.on('click', function(ev){
+      var lat=ev.latlng.lat.toFixed(6), lng=ev.latlng.lng.toFixed(6);
+      if(marker){ marker.setLatLng(ev.latlng); } else { marker=L.marker(ev.latlng).addTo(map); }
+      setCoords(lat,lng);
+    });
+  }
+  if(typeof L!=='undefined'){
+    delete L.Icon.Default.prototype._getIconUrl;
+    L.Icon.Default.mergeOptions({
+      iconRetinaUrl:'/public/vendor/leaflet/images/marker-icon-2x.png',
+      iconUrl:'/public/vendor/leaflet/images/marker-icon.png',
+      shadowUrl:'/public/vendor/leaflet/images/marker-shadow.png'
+    });
+  }
+  document.addEventListener('click', function(ev){
+    if(ev.target.closest('#location-picker-toggle')){
+      var e=els();
+      if(!e.mapDiv) return;
+      var hidden=e.mapDiv.hasAttribute('hidden');
+      if(hidden){
+        e.mapDiv.removeAttribute('hidden');
+        ensureMap();
+        setTimeout(function(){ if(map) map.invalidateSize(); }, 0);
+      } else {
+        e.mapDiv.setAttribute('hidden','');
+      }
+    }
+    if(ev.target.closest('[data-location-clear]')){ clearCoords(); }
+  });
+  document.body.addEventListener('htmx:afterSwap', function(ev){
+    if(ev.target&&ev.target.id==='activity-fields'){ map=null; marker=null; }
+  });
+  document.addEventListener('DOMContentLoaded', function(){
+    var e=els();
+    if(e.mapDiv&&!e.mapDiv.hasAttribute('hidden')) ensureMap();
+  });
+})();`;
+
+const LEAFLET_HEAD = (
+  <>
+    <link rel="stylesheet" href="/public/vendor/leaflet/leaflet.css" />
+    <script src="/public/vendor/leaflet/leaflet.js" />
+  </>
+);
+
 export function ActivityFormPage({
   leader,
   program,
@@ -254,7 +378,7 @@ export function ActivityFormPage({
     : `/admin/programs/${program.id}/activities`;
 
   return (
-    <AdminLayout title={title} leader={leader}>
+    <AdminLayout title={title} leader={leader} extraHead={LEAFLET_HEAD}>
       <h1>{title}</h1>
       <ActivityFormBody
         program={program}
@@ -272,6 +396,7 @@ export function ActivityFormPage({
           </button>
         </form>
       )}
+      <script dangerouslySetInnerHTML={{ __html: LOCATION_PICKER_SCRIPT }} />
     </AdminLayout>
   );
 }

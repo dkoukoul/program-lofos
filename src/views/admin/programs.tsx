@@ -2,6 +2,7 @@ import type { Leader, Program, sections } from "../../db/schema";
 import { SECTION_LABELS } from "../public/layout";
 import { formatPeriod } from "../public/layout";
 import { AdminLayout } from "./layout";
+import { InfoTip } from "./info-tip";
 
 type SectionRow = typeof sections.$inferSelect;
 
@@ -73,6 +74,7 @@ export function ProgramForm({
   return (
     <AdminLayout title="Νέο πρόγραμμα" leader={leader}>
       <h1>Νέο πρόγραμμα</h1>
+      <InfoTip text="Ένα πρόγραμμα είναι μια περίοδος (συνήθως ένας μήνας, αλλά μπορεί να είναι οποιοδήποτε εύρος ημερομηνιών) που περιέχει τις δράσεις της. Ξεκινά ως Πρόχειρο, ορατό μόνο στους βαθμοφόρους — γίνεται δημόσιο όταν το δημοσιεύσεις." />
       {error && <p class="error">{error}</p>}
       <form method="post" action="/admin/programs" class="program-form">
         <label for="periodStart">Έναρξη περιόδου</label>
@@ -84,6 +86,7 @@ export function ProgramForm({
         {leader.role === "system_staff" ? (
           <>
             <label for="sectionId">Τμήμα</label>
+            <InfoTip text="Επίλεξε «Σύστημα» για να δημιουργήσεις το ειδικό πρόγραμμα Δράσεων Συστήματος — αυτές εμφανίζονται αυτόματα σε όλα τα τμήματα, χωρίς να χρειάζεται να τις προσθέσει ξεχωριστά κάθε βαθμοφόρος." />
             <select id="sectionId" name="sectionId">
               <option value="">Σύστημα (Δράσεις Συστήματος, όλα τα τμήματα)</option>
               {sectionsList.map((section) => (

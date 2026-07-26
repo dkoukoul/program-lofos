@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, primaryKey } from "drizzle-orm/sqlite-core";
+import { sqliteTable, text, integer, primaryKey, real } from "drizzle-orm/sqlite-core";
 
 // Τμήματα: Αγέλη / Ομάδα / Κοινότητα — πάντα ακριβώς 3 εγγραφές (§4 architecture doc)
 export const sections = sqliteTable("sections", {
@@ -72,6 +72,10 @@ export const activities = sqliteTable("activities", {
   // §6 architecture doc, και ως το μόνο υποχρεωτικό πεδίο για type="no_activity").
   date: integer("date", { mode: "timestamp" }).notNull(),
   location: text("location"),
+  // Προαιρετικές συντεταγμένες από τον map picker (ux-ui-guidelines) — null αν ο
+  // βαθμοφόρος δεν επέλεξε σημείο στον χάρτη, ανεξάρτητα από το αν υπάρχει `location` κείμενο.
+  locationLat: real("location_lat"),
+  locationLng: real("location_lng"),
   startsAt: integer("starts_at", { mode: "timestamp" }),
   endsAt: integer("ends_at", { mode: "timestamp" }),
   cost: text("cost"),

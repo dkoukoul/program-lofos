@@ -126,6 +126,24 @@ describe("Πρόσβαση σε πρόγραμμα (authorization)", () => {
   });
 });
 
+describe("Οδηγός χρήσης (/admin/help)", () => {
+  test("απαιτεί σύνδεση", async () => {
+    const res = await app.request("/admin/help");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/auth/login");
+  });
+
+  test("συνδεδεμένος βαθμοφόρος βλέπει τον οδηγό", async () => {
+    const leader = await makeLeader();
+    const cookie = await cookieFor(leader);
+
+    const res = await app.request("/admin/help", { headers: { cookie } });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("Οδηγός χρήσης");
+  });
+});
+
 describe("Διαγραφή προγράμματος", () => {
   test("section_leader διαγράφει το πρόγραμμα του και τις δράσεις του", async () => {
     const section = await makeSection("agele");
@@ -229,8 +247,56 @@ describe("Δημιουργία/επεξεργασία/διαγραφή δράσ�
       .where(eq(activities.programId, program.id));
     expect(created?.type).toBe("no_activity");
     expect(created?.location).toBeNull();
+    expect(created?.locationLat).toBeNull();
+    expect(created?.locationLng).toBeNull();
     expect(created?.startsAt).toBeNull();
     expect(created?.whatToBring).toBeNull();
+  });
+
+  test("αποθηκεύει προαιρετικές συντεταγμένες τοποθεσίας και τις εμφανίζει ως link Google Maps", async () => {
+    const section = await makeSection("agele");
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const program = await makeProgram(section.id);
+    const cookie = await cookieFor(leader);
+
+    const createRes = await app.request(`/admin/programs/${program.id}/activities`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: activityFormBody({ locationLat: "35.3387", locationLng: "25.1442" }),
+    });
+    expect(createRes.status).toBe(302);
+
+    const [created] = await db.select().from(activities).where(eq(activities.programId, program.id));
+    expect(created?.locationLat).toBeCloseTo(35.3387);
+    expect(created?.locationLng).toBeCloseTo(25.1442);
+
+    const editPage = await app.request(`/admin/programs/${program.id}/activities/${created!.id}/edit`, {
+      headers: { cookie },
+    });
+    const html = await editPage.text();
+    expect(html).toContain("google.com/maps/search");
+    expect(html).toContain("35.3387");
+  });
+
+  test("απορρίπτει μερικές (μόνο lat, χωρίς lng) ή εκτός εύρους συντεταγμένες", async () => {
+    const section = await makeSection("agele");
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const program = await makeProgram(section.id);
+    const cookie = await cookieFor(leader);
+
+    const partialRes = await app.request(`/admin/programs/${program.id}/activities`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: activityFormBody({ locationLat: "35.3387" }),
+    });
+    expect(partialRes.status).toBe(400);
+
+    const outOfRangeRes = await app.request(`/admin/programs/${program.id}/activities`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: activityFormBody({ locationLat: "999", locationLng: "25.1442" }),
+    });
+    expect(outOfRangeRes.status).toBe(400);
   });
 
   test("quick-typical δημιουργεί Τυπική στην επόμενη διαθέσιμη Κυριακή με τα defaults", async () => {
@@ -538,6 +604,42 @@ describe("Γρήγορη επεξεργασία (quick-edit) από την αρ�
     expect(updated?.endsAt?.getHours()).toBe(12);
     expect(updated?.type).toBe("typical");
     expect(updated?.date.getDate()).toBe(5);
+  });
+
+  test("POST quick-edit καθαρίζει τις συντεταγμένες αν αλλάξει το κείμενο τοποθεσίας", async () => {
+    const section = await makeSection("agele");
+    const program = await makeProgram(section.id);
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const cookie = await cookieFor(leader);
+    const activity = await makeActivity(program.id, { locationLat: 35.3387, locationLng: 25.1442 });
+
+    await app.request(`/admin/programs/${program.id}/activities/${activity.id}/quick-edit`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ location: "Νέα τοποθεσία", startTime: "11:00", endTime: "13:00" }),
+    });
+
+    const [updated] = await db.select().from(activities).where(eq(activities.id, activity.id));
+    expect(updated?.locationLat).toBeNull();
+    expect(updated?.locationLng).toBeNull();
+  });
+
+  test("POST quick-edit κρατάει τις συντεταγμένες αν το κείμενο τοποθεσίας μένει ίδιο", async () => {
+    const section = await makeSection("agele");
+    const program = await makeProgram(section.id);
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const cookie = await cookieFor(leader);
+    const activity = await makeActivity(program.id, { locationLat: 35.3387, locationLng: 25.1442 });
+
+    await app.request(`/admin/programs/${program.id}/activities/${activity.id}/quick-edit`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ location: "Λόφος", startTime: "12:00", endTime: "13:00" }),
+    });
+
+    const [updated] = await db.select().from(activities).where(eq(activities.id, activity.id));
+    expect(updated?.locationLat).toBeCloseTo(35.3387);
+    expect(updated?.locationLng).toBeCloseTo(25.1442);
   });
 
   test("POST quick-edit σε δημοσιευμένο πρόγραμμα μαρκάρει τα αλλαγμένα πεδία", async () => {

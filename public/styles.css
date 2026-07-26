@@ -149,6 +149,10 @@ a {
   margin-bottom: 0.25rem;
 }
 
+.intro {
+  text-align: center;
+}
+
 .hero {
   text-align: center;
   padding: 1.5rem 0 1rem;
@@ -179,14 +183,35 @@ a {
 /* ---- Home: κάρτες τμημάτων (3D flip, ratio τραπουλόχαρτου) ---- */
 
 body.home main {
-  max-width: 78rem;
+  position: relative;
+  max-width: 92rem;
+  padding: 2rem;
+  overflow: hidden;
+}
+
+/* Λογότυπο συστήματος, faded, ως background πίσω από τις κάρτες. */
+body.home main::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: url("/public/images/%CE%9B%CE%BF%CE%B3%CF%8C%CF%84%CF%85%CF%80%CE%BF%20%CE%91%CF%80%CE%BB%CF%8C.png")
+    no-repeat center / min(55%, 34rem);
+  opacity: 0.06;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.intro,
+.section-cards {
+  position: relative;
+  z-index: 1;
 }
 
 .section-cards {
   display: grid;
   grid-template-columns: 1fr;
   justify-items: center;
-  gap: 1.75rem;
+  gap: 2rem;
   margin-top: 1.5rem;
 }
 
@@ -201,7 +226,7 @@ body.home main {
 .play-card {
   position: relative;
   width: 100%;
-  max-width: 23rem;
+  max-width: 26rem;
   aspect-ratio: 5 / 7;
   perspective: 1600px;
 }
@@ -719,6 +744,30 @@ form.program-form {
   margin: 0.5rem 0;
 }
 
+.location-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.location-picker-status {
+  font-size: 0.9rem;
+}
+
+.location-picker-status a,
+.location-link {
+  color: var(--section-accent);
+}
+
+.location-picker-map {
+  flex-basis: 100%;
+  height: 260px;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+}
+
 .date-chips {
   display: flex;
   flex-wrap: wrap;
@@ -739,6 +788,87 @@ form.program-form {
 
 .hint {
   color: var(--muted);
+}
+
+/* ---- Info tips (ⓘ) — CSS/HTML native <details>, καμία JS βιβλιοθήκη ---- */
+
+.info-tip {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  margin-left: 0.3rem;
+}
+
+.info-tip summary {
+  position: relative;
+  list-style: none;
+  cursor: pointer;
+  width: 1.35rem;
+  height: 1.35rem;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--card-bg);
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.info-tip summary::-webkit-details-marker {
+  display: none;
+}
+
+/* διευρύνει το tap target σε ~44px χωρίς να αλλάζει το οπτικό μέγεθος του ⓘ (§1 ux-ui-guidelines) */
+.info-tip summary::before {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+
+.info-tip[open] summary {
+  border-color: var(--section-accent);
+  color: var(--section-accent);
+}
+
+.info-tip p {
+  position: absolute;
+  z-index: 20;
+  top: 1.75rem;
+  left: 0;
+  margin: 0;
+  padding: 0.6rem 0.75rem;
+  width: max-content;
+  max-width: min(18rem, calc(100vw - 2.5rem));
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  box-shadow: 0 8px 20px rgb(0 0 0 / 15%);
+}
+
+/* ---- Admin: οδηγός χρήσης (/admin/help) ---- */
+
+.help-section {
+  margin: 1.5rem 0;
+}
+
+.help-section h2 {
+  font-size: 1.05rem;
+  margin-bottom: 0.4rem;
+}
+
+.help-section ul,
+.help-section ol {
+  padding-left: 1.25rem;
+  margin: 0.4rem 0;
+}
+
+.help-section li {
+  margin: 0.3rem 0;
 }
 
 .sticky-save {
@@ -1009,6 +1139,7 @@ form.program-form {
 .quick-actions {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.5rem;
   margin: 1rem 0;
 }

@@ -3,16 +3,17 @@ import { selectFeaturedActivity } from "../../lib/schedule";
 import {
   ACTIVITY_TYPE_INFO,
   ActivityCard,
-  CHANGED_FIELD_LABELS,
   PublicLayout,
   SECTION_LABELS,
   SECTION_LOGOS,
   SECTION_ORDER,
   SECTION_VARIANTS,
+  changedFieldLabels,
   formatDateNumeric,
   formatPeriod,
   formatTimeRange,
   formatWeekday,
+  googleMapsUrl,
 } from "./layout";
 
 type ActivityRow = typeof activities.$inferSelect;
@@ -48,8 +49,8 @@ function FeaturedActivity({ activity }: { activity: ActivityRow }) {
       {(activity.isSystemWide || changedFields.length > 0) && (
         <div class="activity-badges">
           {activity.isSystemWide && <span class="badge badge-system">🛡️ Δράση Συστήματος</span>}
-          {changedFields.map((field) => (
-            <span class="badge badge-changed">✏️ {CHANGED_FIELD_LABELS[field] ?? "Άλλαξε κάτι"}</span>
+          {changedFieldLabels(changedFields).map((label) => (
+            <span class="badge badge-changed">✏️ {label}</span>
           ))}
         </div>
       )}
@@ -59,7 +60,21 @@ function FeaturedActivity({ activity }: { activity: ActivityRow }) {
       <p class="card-type">
         {typeInfo.icon} {typeInfo.label}
       </p>
-      {activity.location && <p class="card-location">📍 {activity.location}</p>}
+      {activity.location &&
+        (activity.locationLat != null && activity.locationLng != null ? (
+          <p class="card-location">
+            <a
+              href={googleMapsUrl(activity.locationLat, activity.locationLng)}
+              target="_blank"
+              rel="noopener noreferrer"
+              class="location-link"
+            >
+              🗺️ {activity.location}
+            </a>
+          </p>
+        ) : (
+          <p class="card-location">📍 {activity.location}</p>
+        ))}
     </div>
   );
 }

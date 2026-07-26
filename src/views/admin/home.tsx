@@ -1,7 +1,8 @@
 import type { Activity, Leader, Program, sections } from "../../db/schema";
-import { ACTIVITY_TYPE_INFO, SECTION_LABELS, formatDateNumeric } from "../public/layout";
+import { ACTIVITY_TYPE_INFO, SECTION_LABELS, formatDateNumeric, googleMapsUrl } from "../public/layout";
 import { toTimeInputValue } from "./wizard/form";
 import { AdminLayout } from "./layout";
+import { InfoTip } from "./info-tip";
 
 type SectionRow = typeof sections.$inferSelect;
 type SectionType = SectionRow["type"];
@@ -20,7 +21,7 @@ const COLUMNS: { key: HomeSortColumn; label: string }[] = [
   { key: "date", label: "Ημερομηνία" },
   { key: "section", label: "Τμήμα" },
   { key: "type", label: "Τύπος" },
-  { key: "location", label: "Τόπος" },
+  { key: "location", label: "Τοποθεσία" },
   { key: "status", label: "Κατάσταση" },
 ];
 
@@ -85,7 +86,20 @@ export function ActivityRow({
       <td>{formatDateNumeric(activity.date)}</td>
       <td>{sectionText}</td>
       <td>{typeText}</td>
-      <td>{activity.location ?? "—"}</td>
+      <td>
+        {activity.location && activity.locationLat != null && activity.locationLng != null ? (
+          <a
+            href={googleMapsUrl(activity.locationLat, activity.locationLng)}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="location-link"
+          >
+            🗺️ {activity.location}
+          </a>
+        ) : (
+          (activity.location ?? "—")
+        )}
+      </td>
       <td>
         <span class={`badge badge-status-${program.status}`}>{statusText}</span>
       </td>
@@ -111,7 +125,7 @@ export function ActivityRow({
   );
 }
 
-/** Γραμμή σε κατάσταση quick-edit — inline φόρμα (τόπος + ώρα) μέσα στο ίδιο tr, χωρίς πλοήγηση στο πλήρες wizard. */
+/** Γραμμή σε κατάσταση quick-edit — inline φόρμα (τοποθεσία + ώρα) μέσα στο ίδιο tr, χωρίς πλοήγηση στο πλήρες wizard. */
 export function ActivityRowEditForm({
   row,
   sectionText,
@@ -137,7 +151,7 @@ export function ActivityRowEditForm({
           hx-target={`#activity-row-${activity.id}`}
           hx-swap="outerHTML"
         >
-          <input type="text" name="location" value={activity.location ?? ""} placeholder="Τόπος" maxlength={200} />
+          <input type="text" name="location" value={activity.location ?? ""} placeholder="Τοποθεσία" maxlength={200} />
           <span class="quick-edit-time">
             <input type="time" name="startTime" value={activity.startsAt ? toTimeInputValue(activity.startsAt) : ""} />
             <span aria-hidden="true">–</span>
@@ -282,7 +296,10 @@ export function AdminHomePage({
                     </a>
                   </th>
                 ))}
-                <th class="home-table-actions-header">Ενέργειες</th>
+                <th class="home-table-actions-header">
+                  Ενέργειες
+                  <InfoTip text="✎ Γρήγορη επεξεργασία αλλάζει μόνο τόπο/ώρα, χωρίς να φύγεις από τη σελίδα. ⤢ Λεπτομέρειες & πλήρης επεξεργασία ανοίγει το πλήρες wizard, για κάθε άλλο πεδίο." />
+                </th>
               </tr>
             </thead>
             <tbody>

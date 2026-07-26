@@ -72,7 +72,16 @@ export function checkOverlapPolicy(existing: unknown | null, allowOverlapEnv: bo
   return allowOverlapEnv ? "warn" : "block";
 }
 
-const TRACKED_FIELDS = ["date", "location", "startsAt", "endsAt", "cost", "whatToBring"] as const;
+const TRACKED_FIELDS = [
+  "date",
+  "location",
+  "locationLat",
+  "locationLng",
+  "startsAt",
+  "endsAt",
+  "cost",
+  "whatToBring",
+] as const;
 type TrackedField = (typeof TRACKED_FIELDS)[number];
 
 function valuesEqual(a: unknown, b: unknown): boolean {

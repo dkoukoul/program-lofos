@@ -41,13 +41,25 @@ export const ACTIVITY_TYPE_INFO: Record<ActivityRow["type"], { icon: string; lab
 };
 
 export const CHANGED_FIELD_LABELS: Record<string, string> = {
-  location: "Άλλαξε ο τόπος",
+  location: "Άλλαξε η τοποθεσία",
+  locationLat: "Άλλαξε η τοποθεσία",
+  locationLng: "Άλλαξε η τοποθεσία",
   startsAt: "Άλλαξε η ώρα έναρξης",
   endsAt: "Άλλαξε η ώρα λήξης",
   date: "Άλλαξε η ημερομηνία",
   cost: "Άλλαξε το κόστος",
   whatToBring: "Άλλαξε τι να κρατάνε",
 };
+
+/** Ετικέτες αλλαγμένων πεδίων, deduped (π.χ. `location`+`locationLat`+`locationLng` μαζί → μία ετικέτα "Άλλαξε η τοποθεσία"). */
+export function changedFieldLabels(changedFields: string[]): string[] {
+  return [...new Set(changedFields.map((field) => CHANGED_FIELD_LABELS[field] ?? "Άλλαξε κάτι"))];
+}
+
+/** Google Maps link για προαιρετικές συντεταγμένες τοποθεσίας δράσης. */
+export function googleMapsUrl(lat: number, lng: number): string {
+  return `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`;
+}
 
 const timeFormatter = new Intl.DateTimeFormat("el-GR", { hour: "2-digit", minute: "2-digit", hour12: false });
 const weekdayFormatter = new Intl.DateTimeFormat("el-GR", { weekday: "long" });
@@ -113,8 +125,8 @@ export function ActivityCard({ activity }: { activity: ActivityRow }) {
             {typeInfo.icon} {typeInfo.label}
           </span>
           {activity.isSystemWide && <span class="badge badge-system">🛡️ Δράση Συστήματος</span>}
-          {changedFields.map((field) => (
-            <span class="badge badge-changed">✏️ {CHANGED_FIELD_LABELS[field] ?? "Άλλαξε κάτι"}</span>
+          {changedFieldLabels(changedFields).map((label) => (
+            <span class="badge badge-changed">✏️ {label}</span>
           ))}
         </div>
         {(activity.startsAt || activity.endsAt) && (
@@ -123,7 +135,21 @@ export function ActivityCard({ activity }: { activity: ActivityRow }) {
             {activity.endsAt ? ` – ${formatActivityTime(activity.endsAt)}` : ""}
           </p>
         )}
-        {activity.location && <p class="activity-location">📍 {activity.location}</p>}
+        {activity.location &&
+          (activity.locationLat != null && activity.locationLng != null ? (
+            <p class="activity-location">
+              <a
+                href={googleMapsUrl(activity.locationLat, activity.locationLng)}
+                target="_blank"
+                rel="noopener noreferrer"
+                class="location-link"
+              >
+                🗺️ {activity.location}
+              </a>
+            </p>
+          ) : (
+            <p class="activity-location">📍 {activity.location}</p>
+          ))}
         {activity.cost && <p class="activity-cost">💶 {activity.cost}</p>}
         {activity.whatToBring && <p class="activity-what-to-bring">🎒 Τι να φέρετε: {activity.whatToBring}</p>}
       </div>
@@ -186,7 +212,6 @@ export function PublicLayout({
               alt=""
               aria-hidden="true"
             />
-            4ο Σύστημα Αεροπροσκόπων Ηρακλείου
           </a>
           <SectionNav active={activeSection} />
           {isLoggedIn ? (

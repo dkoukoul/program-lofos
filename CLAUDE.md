@@ -6,7 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Το **program.lofos.gr** είναι μια web εφαρμογή για το 4ο Σύστημα Αεροπροσκόπων Ηρακλείου: επιτρέπει σε βαθμοφόρους να ορίζουν το μηνιαίο πρόγραμμα δράσεων ανά τμήμα (Αγέλη/Ομάδα/Κοινότητα) και το προβάλλει δημόσια, χωρίς login, σε γονείς/παιδιά όταν δηλωθεί "ολοκληρωμένο".
 
-**Τρέχουσα κατάσταση**: υλοποιημένα — auth (magic-link login, sessions, `config/leaders.json` ως πηγή αλήθειας για πρόσβαση/απενεργοποίηση, βλ. `src/lib/auth.ts`, `src/lib/authorize.ts`, `src/db/syncLeaders.ts`), δημόσιες σελίδες ανά τμήμα (`src/routes/public.tsx`, `src/lib/schedule.ts`, `src/views/public/`), και το διαχειριστικό προγράμματος/δράσεων (`src/routes/admin.tsx`, `src/views/admin/`) — δημιουργία/λίστα/δημοσίευση Προγράμματος, πλήρες wizard δημιουργίας/επεξεργασίας Δράσεων με quick-add συντομεύσεις, overlap check, tracking αλλαγών μετά τη δημοσίευση, email ειδοποιήσεις. Ό,τι μένει: iCal feed (`src/routes/ical.ts` είναι ακόμα placeholder).
+**Τρέχουσα κατάσταση**: υλοποιημένα — auth (magic-link login, sessions, `config/leaders.json` ως πηγή αλήθειας για πρόσβαση/απενεργοποίηση, βλ. `src/lib/auth.ts`, `src/lib/authorize.ts`, `src/db/syncLeaders.ts`), δημόσιες σελίδες ανά τμήμα (`src/routes/public.tsx`, `src/lib/schedule.ts`, `src/views/public/`), και το διαχειριστικό προγράμματος/δράσεων (`src/routes/admin.tsx`, `src/views/admin/`) — δημιουργία/λίστα/δημοσίευση Προγράμματος, πλήρες wizard δημιουργίας/επεξεργασίας Δράσεων με quick-add συντομεύσεις, overlap check, tracking αλλαγών μετά τη δημοσίευση, email ειδοποιήσεις, οδηγός χρήσης διαχειριστικού (`/admin/help`, `src/views/admin/help.tsx`) και info tips (`src/views/admin/info-tip.tsx`). Ό,τι μένει: iCal feed (`src/routes/ical.ts` είναι ακόμα placeholder).
 
 Αυτό το project χτίζεται σε **συνεργασία human + AI coding agent**. Δεν υπάρχει άλλος senior engineer να πιάσει κάτι που ξέφυγε — τα docs παρακάτω είναι ο μηχανισμός που κρατάει τη συνέπεια ανάμεσα σε sessions.
 
@@ -33,6 +33,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
    - Άλλαξε λειτουργικός κανόνας/ροή/ρόλος → ενημέρωσε `docs/purpose-and-scope.md`.
    - Άλλαξε data model, stack, δομή project, security posture, deployment → ενημέρωσε `docs/architecture-and-tech-stack.md`.
    - Μικρότερη τεχνική απόφαση που δεν αξίζει αλλαγή σε ολόκληρη ενότητα (π.χ. "διαλέξαμε X library αντί για Y γιατί Z") → μία γραμμή στο `docs/decisions.md`.
+   - Άλλαξε ροή/οθόνη/συντόμευση του διαχειριστικού → ενημέρωσε στο ίδιο change και τον **οδηγό χρήσης** (`src/views/admin/help.tsx`, προσβάσιμος από `/admin/help`) και, όπου χρειάζεται νέα επεξήγηση μη προφανούς έννοιας, πρόσθεσε `InfoTip` (`src/views/admin/info-tip.tsx`) δίπλα στο σχετικό label/heading — βλ. [ux-ui-guidelines.md §2.4](docs/ux-ui-guidelines.md). Ο οδηγός είναι η μόνη πηγή βοήθειας μέσα στο ίδιο το διαχειριστικό — δεν πρέπει ποτέ να μείνει πίσω από τον κώδικα.
    - Docs και κώδικας δεν πρέπει ποτέ να αποκλίνουν. Αν εντοπίσεις απόκλιση σε υπάρχον κώδικα, διόρθωσέ τη πριν προχωρήσεις σε νέο task.
 8. **Commit** — μόνο όταν ζητηθεί ρητά, μικρά εστιασμένα commits, μήνυμα που εξηγεί το "γιατί".
 9. **Security** - είναι public repo και δεν πρέπει ΠΟΤΕ να μπει κάποιο API KEY, ευαίσθητα δεδομένα, ή passwords.

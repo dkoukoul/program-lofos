@@ -44,6 +44,7 @@
 | Auth | Custom **magic-link (passwordless)** πάνω σε Hono middleware | Βλ. §5. |
 | Email | **Resend** (API) | Επιλέχθηκε από εσάς. Transactional emails για magic link + ειδοποιήσεις δημοσίευσης/αλλαγών. |
 | iCal | **ical-generator** (npm package) | Παράγει σωστά .ics χωρίς να γράψουμε τη μορφή με το χέρι. |
+| Map picker | **Leaflet** + OpenStreetMap tiles, vendored ως static αρχεία (`public/vendor/leaflet/`), όπως και το htmx (βλ. decisions.md) | Προαιρετική επιλογή σημείου στον χάρτη για τη Τοποθεσία δράσης. Δεν χρειάζεται API key (αντίθετα με Google Maps JS API) — ευθυγραμμίζεται με τον κανόνα "ποτέ API key στο public repo" (§10, CLAUDE.md). |
 | Reverse proxy / TLS | **Caddy** | Αυτόματο HTTPS (Let's Encrypt) με ελάχιστο config, πολύ πιο απλό από nginx+certbot. |
 | Process management | **systemd** service | Ήδη διαθέσιμο σε κάθε Linux VPS, χωρίς ανάγκη για Docker. |
 | Testing | `bun:test` | Ενσωματωμένο στο Bun, καμία επιπλέον εξάρτηση. |
@@ -91,7 +92,7 @@ program-lofos/
 - `magic_links`: id, leader_id, token_hash, expires_at, used_at
 - `sessions`: id, leader_id, token_hash, expires_at, created_at, user_agent (για revocation)
 - `programs` (περίοδοι προγράμματος): id, section_id (null αν είναι Σύστημα-wide πρόγραμμα-container — βλ. σημείωση), period_start, period_end, status (`draft`|`published`), theme overrides (χρώμα/εικόνες), theme_title (προαιρετικός τίτλος θέματος περιόδου, π.χ. "Ο Μόγλης" — κυρίως Αγέλη, βλ. §8), published_at
-- `activities` (δράσεις): id, program_id, section_id (ή flag `is_system_wide`), type (`typical`|`day_trip`|`multi_day`|`other`|`no_activity`), location, starts_at, ends_at (ή end_date για `multi_day`), cost, what_to_bring, created/updated timestamps, `changed_after_publish_fields` (json λίστα πεδίων που άλλαξαν μετά τη δημοσίευση, για το UI badge). Για `type = no_activity`: τα πεδία τόπου/ώρας/κόστους παραμένουν null — η εγγραφή χρησιμεύει μόνο ως marker ότι η ημερομηνία είναι "κατειλημμένη" (καμία δράση).
+- `activities` (δράσεις): id, program_id, section_id (ή flag `is_system_wide`), type (`typical`|`day_trip`|`multi_day`|`other`|`no_activity`), location (ελεύθερο κείμενο τοποθεσίας), location_lat/location_lng (real, προαιρετικές συντεταγμένες από τον map picker — null αν δεν έχει επιλεγεί σημείο στον χάρτη, ανεξάρτητα από το αν υπάρχει κείμενο `location`· όταν υπάρχουν, εμφανίζονται δημόσια ως link Google Maps), starts_at, ends_at (ή end_date για `multi_day`), cost, what_to_bring, created/updated timestamps, `changed_after_publish_fields` (json λίστα πεδίων που άλλαξαν μετά τη δημοσίευση, για το UI badge). Για `type = no_activity`: τα πεδία τοποθεσίας/ώρας/κόστους παραμένουν null — η εγγραφή χρησιμεύει μόνο ως marker ότι η ημερομηνία είναι "κατειλημμένη" (καμία δράση).
 - `activity_custom_fields`: id, activity_id, τίτλος, περιγραφή
 - `activity_participants`: activity_id, leader_id (many-to-many, ποιοι βαθμοφόροι συμμετέχουν)
 

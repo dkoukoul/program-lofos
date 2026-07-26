@@ -57,8 +57,14 @@ function AdminActivityCard({ activity }: { activity: Activity }) {
           <p class="activity-location">📍 {activity.location}</p>
         ))}
       <form method="post" action={`/admin/programs/${activity.programId}/activities/${activity.id}/delete`}>
-        <button type="submit" class="link-button link-button--danger" onclick="return confirm('Διαγραφή δράσης;');">
-          Διαγραφή
+        <button
+          type="submit"
+          class="icon-btn icon-btn--danger"
+          title="Διαγραφή"
+          aria-label="Διαγραφή δράσης"
+          onclick="return confirm('Διαγραφή δράσης;');"
+        >
+          🗑
         </button>
       </form>
     </li>

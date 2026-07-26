@@ -1,6 +1,6 @@
 import type { Activity, Leader, Program, sections } from "../../db/schema";
 import { ACTIVITY_TYPE_INFO, SECTION_LABELS, formatDateNumeric, googleMapsUrl } from "../public/layout";
-import { toTimeInputValue } from "./wizard/form";
+import { TimeInput, toTimeInputValue } from "./wizard/form";
 import { AdminLayout } from "./layout";
 import { InfoTip } from "./info-tip";
 
@@ -153,9 +153,9 @@ export function ActivityRowEditForm({
         >
           <input type="text" name="location" value={activity.location ?? ""} placeholder="Τοποθεσία" maxlength={200} />
           <span class="quick-edit-time">
-            <input type="time" name="startTime" value={activity.startsAt ? toTimeInputValue(activity.startsAt) : ""} />
+            <TimeInput name="startTime" value={activity.startsAt ? toTimeInputValue(activity.startsAt) : ""} />
             <span aria-hidden="true">–</span>
-            <input type="time" name="endTime" value={activity.endsAt ? toTimeInputValue(activity.endsAt) : ""} />
+            <TimeInput name="endTime" value={activity.endsAt ? toTimeInputValue(activity.endsAt) : ""} />
           </span>
           <span class="quick-edit-actions">
             <button type="submit" class="icon-btn icon-btn-primary" title="Αποθήκευση" aria-label="Αποθήκευση">

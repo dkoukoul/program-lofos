@@ -342,6 +342,22 @@ admin.get("/programs/:id", async (c) => {
   return c.html(<ProgramScreen leader={leader} program={program} activitiesList={activitiesList} />);
 });
 
+admin.post("/programs/:id/delete", async (c) => {
+  const program = c.get("program");
+  const programActivityIds = (
+    await db.select({ id: activities.id }).from(activities).where(eq(activities.programId, program.id))
+  ).map((row) => row.id);
+
+  if (programActivityIds.length > 0) {
+    await db.delete(activityCustomFields).where(inArray(activityCustomFields.activityId, programActivityIds));
+    await db.delete(activityParticipants).where(inArray(activityParticipants.activityId, programActivityIds));
+    await db.delete(activities).where(eq(activities.programId, program.id));
+  }
+  await db.delete(programs).where(eq(programs.id, program.id));
+
+  return c.redirect("/admin/programs");
+});
+
 admin.post("/programs/:id/publish", async (c) => {
   const program = c.get("program");
   if (program.status === "draft") {

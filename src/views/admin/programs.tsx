@@ -44,6 +44,15 @@ export function ProgramsIndexPage({
                 <span class="period">{formatPeriod(program.periodStart, program.periodEnd)}</span>
                 <span class={`badge badge-status-${program.status}`}>{STATUS_LABELS[program.status]}</span>
               </a>
+              <form method="post" action={`/admin/programs/${program.id}/delete`}>
+                <button
+                  type="submit"
+                  class="link-button link-button--danger"
+                  onclick="return confirm('Διαγραφή προγράμματος; Θα διαγραφούν και όλες οι δράσεις του.');"
+                >
+                  Διαγραφή
+                </button>
+              </form>
             </li>
           ))}
         </ul>

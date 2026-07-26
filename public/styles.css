@@ -799,7 +799,14 @@ form.program-form {
   gap: 0.6rem;
 }
 
+.program-card {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
 .program-card a {
+  flex: 1;
   display: flex;
   flex-wrap: wrap;
   align-items: center;

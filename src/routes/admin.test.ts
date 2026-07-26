@@ -126,6 +126,52 @@ describe("Πρόσβαση σε πρόγραμμα (authorization)", () => {
   });
 });
 
+describe("Διαγραφή προγράμματος", () => {
+  test("section_leader διαγράφει το πρόγραμμα του και τις δράσεις του", async () => {
+    const section = await makeSection("agele");
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const program = await makeProgram(section.id);
+    const cookie = await cookieFor(leader);
+
+    const createRes = await app.request(`/admin/programs/${program.id}/activities`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: activityFormBody(),
+    });
+    expect(createRes.status).toBe(302);
+    const [created] = await db.select().from(activities).where(eq(activities.programId, program.id));
+
+    const deleteRes = await app.request(`/admin/programs/${program.id}/delete`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    expect(deleteRes.status).toBe(302);
+    expect(deleteRes.headers.get("location")).toBe("/admin/programs");
+
+    const remainingPrograms = await db.select().from(programs).where(eq(programs.id, program.id));
+    expect(remainingPrograms.length).toBe(0);
+    const remainingActivities = await db.select().from(activities).where(eq(activities.id, created!.id));
+    expect(remainingActivities.length).toBe(0);
+  });
+
+  test("section_leader δεν μπορεί να διαγράψει πρόγραμμα άλλου τμήματος", async () => {
+    const sectionA = await makeSection("agele");
+    const sectionB = await makeSection("omada");
+    const leader = await makeLeader({ role: "section_leader", sectionId: sectionA.id });
+    const otherProgram = await makeProgram(sectionB.id);
+    const cookie = await cookieFor(leader);
+
+    const res = await app.request(`/admin/programs/${otherProgram.id}/delete`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    expect(res.status).toBe(403);
+
+    const stillThere = await db.select().from(programs).where(eq(programs.id, otherProgram.id));
+    expect(stillThere.length).toBe(1);
+  });
+});
+
 describe("Δημιουργία/επεξεργασία/διαγραφή δράσης", () => {
   test("create -> edit -> delete round-trip", async () => {
     const section = await makeSection("agele");

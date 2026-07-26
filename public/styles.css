@@ -180,6 +180,43 @@ a {
   font-style: italic;
 }
 
+/* ---- Εγγραφή σε iCal ---- */
+
+.ical-subscribe {
+  text-align: center;
+  margin: 0 0 1.5rem;
+}
+
+.btn-ical {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  min-height: 44px;
+  padding: 0.6rem 1.1rem;
+  border-radius: 0.6rem;
+  background: var(--section-accent);
+  color: #fff;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.section-agele .btn-ical {
+  color: #1f2933;
+}
+
+.ical-subscribe-hint {
+  max-width: 32rem;
+  margin: 0.5rem auto 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.ical-subscribe-link {
+  color: var(--section-accent);
+  word-break: break-all;
+}
+
 /* ---- Home: κάρτες τμημάτων (3D flip, ratio τραπουλόχαρτου) ---- */
 
 body.home main {
@@ -686,10 +723,6 @@ body.admin .site-title {
   min-height: 44px;
 }
 
-.link-button--danger {
-  color: var(--danger);
-}
-
 form.activity-form,
 form.program-form {
   display: flex;
@@ -705,7 +738,6 @@ form.program-form {
 
 .activity-form input[type="text"],
 .activity-form input[type="date"],
-.activity-form input[type="time"],
 .activity-form textarea,
 .activity-form select,
 .program-form input,
@@ -721,6 +753,25 @@ form.program-form {
 
 .activity-form textarea {
   min-height: 5rem;
+}
+
+.time-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.time-input select {
+  width: auto;
+}
+
+.activity-form .time-input select {
+  min-height: 44px;
+  padding: 0.5rem 0.4rem;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-sizing: border-box;
 }
 
 .wizard-step {
@@ -1093,6 +1144,11 @@ form.program-form {
   filter: brightness(1.08);
 }
 
+.icon-btn--danger:hover {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
 .quick-edit-form {
   display: flex;
   flex-wrap: wrap;
@@ -1105,10 +1161,19 @@ form.program-form {
   min-width: 8rem;
 }
 
-.quick-edit-form input[type="text"],
-.quick-edit-form input[type="time"] {
+.quick-edit-form input[type="text"] {
   min-height: 44px;
   padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  font-size: 0.95rem;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.quick-edit-form .time-input select {
+  min-height: 44px;
+  padding: 0.4rem 0.4rem;
   border: 1px solid var(--border);
   border-radius: 0.5rem;
   font-size: 0.95rem;

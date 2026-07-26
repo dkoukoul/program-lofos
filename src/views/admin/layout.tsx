@@ -8,6 +8,27 @@ type AdminLayoutProps = {
   children: unknown;
 };
 
+/**
+ * Συγχρονίζει τα ζεύγη ώρας/λεπτών <select> (βλ. TimeInput στο wizard/form.tsx) με το κρυφό input
+ * που διαβάζουν τα routes. Event delegation στο document ώστε να δουλεύει και μετά από htmx swaps
+ * (αλλαγή τύπου δράσης, quick-edit γραμμές) χωρίς re-init.
+ */
+const TIME_INPUT_SCRIPT = `document.addEventListener('change', function(ev){
+  var t = ev.target;
+  var isHour = t.matches && t.matches('[data-time-hour]');
+  var isMinute = t.matches && t.matches('[data-time-minute]');
+  if(!isHour && !isMinute) return;
+  var wrap = t.closest('[data-time-input]');
+  if(!wrap) return;
+  var hourSel = wrap.querySelector('[data-time-hour]');
+  var minSel = wrap.querySelector('[data-time-minute]');
+  var hidden = wrap.querySelector('[data-time-value]');
+  if(!hourSel || !minSel || !hidden) return;
+  if(isHour && hourSel.value && !minSel.value) minSel.value = '00';
+  if(isMinute && minSel.value && !hourSel.value) hourSel.value = '00';
+  hidden.value = (hourSel.value && minSel.value) ? (hourSel.value + ':' + minSel.value) : '';
+});`;
+
 export function AdminLayout({ title, leader, wide, extraHead, children }: AdminLayoutProps) {
   return (
     <html lang="el">
@@ -41,6 +62,7 @@ export function AdminLayout({ title, leader, wide, extraHead, children }: AdminL
           </form>
         </header>
         <main class={wide ? "admin-main admin-main--wide" : "admin-main"}>{children}</main>
+        <script dangerouslySetInnerHTML={{ __html: TIME_INPUT_SCRIPT }} />
       </body>
     </html>
   );

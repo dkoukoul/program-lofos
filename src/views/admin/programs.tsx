@@ -48,10 +48,12 @@ export function ProgramsIndexPage({
               <form method="post" action={`/admin/programs/${program.id}/delete`}>
                 <button
                   type="submit"
-                  class="link-button link-button--danger"
+                  class="icon-btn icon-btn--danger"
+                  title="Διαγραφή"
+                  aria-label="Διαγραφή προγράμματος"
                   onclick="return confirm('Διαγραφή προγράμματος; Θα διαγραφούν και όλες οι δράσεις του.');"
                 >
-                  Διαγραφή
+                  🗑
                 </button>
               </form>
             </li>

@@ -21,6 +21,45 @@ export function toTimeInputValue(date: Date): string {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+const TIME_HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
+const TIME_MINUTES = Array.from({ length: 60 }, (_, i) => pad(i));
+
+/**
+ * Δύο native <select> (ώρα/λεπτά) αντί για <input type="time">: το Firefox desktop δεν δείχνει
+ * κανένα picker UI για type="time" (μόνο spinners), ενώ τα <select> δίνουν συνεπή εμφάνιση σε όλα
+ * τα browsers. Ο συνδυασμός γράφεται σε κρυφό input με το ίδιο name ώστε η φόρμα/routes να μη
+ * χρειάζονται αλλαγή — η συγχρονισμός γίνεται από το script στο AdminLayout.
+ */
+export function TimeInput({ id, name, value }: { id?: string; name: string; value: string }) {
+  const [h, m] = value.includes(":") ? value.split(":") : ["", ""];
+  return (
+    <span class="time-input" data-time-input>
+      <input type="hidden" name={name} value={value} data-time-value />
+      <select id={id} aria-label="Ώρα" data-time-hour>
+        <option value="" selected={h === ""}>
+          --
+        </option>
+        {TIME_HOURS.map((hh) => (
+          <option value={hh} selected={hh === h}>
+            {hh}
+          </option>
+        ))}
+      </select>
+      <span aria-hidden="true">:</span>
+      <select aria-label="Λεπτά" data-time-minute>
+        <option value="" selected={m === ""}>
+          --
+        </option>
+        {TIME_MINUTES.map((mm) => (
+          <option value={mm} selected={mm === m}>
+            {mm}
+          </option>
+        ))}
+      </select>
+    </span>
+  );
+}
+
 export type CustomFieldValue = { title: string; description: string };
 
 export type ActivityFormValues = {
@@ -123,16 +162,16 @@ function ActivityFields({
         {values.type === "multi_day" ? (
           <>
             <label for="startTime">Ημερομηνία έναρξης (ώρα)</label>
-            <input type="time" id="startTime" name="startTime" value={values.startTime} />
+            <TimeInput id="startTime" name="startTime" value={values.startTime} />
             <label for="endTime">Ημερομηνία/ώρα λήξης</label>
-            <input type="time" id="endTime" name="endTime" value={values.endTime} />
+            <TimeInput id="endTime" name="endTime" value={values.endTime} />
           </>
         ) : (
           <>
             <label for="startTime">Ώρα έναρξης</label>
-            <input type="time" id="startTime" name="startTime" value={values.startTime} />
+            <TimeInput id="startTime" name="startTime" value={values.startTime} />
             <label for="endTime">Ώρα λήξης</label>
-            <input type="time" id="endTime" name="endTime" value={values.endTime} />
+            <TimeInput id="endTime" name="endTime" value={values.endTime} />
           </>
         )}
       </section>
@@ -391,8 +430,14 @@ export function ActivityFormPage({
       />
       {editingActivityId && (
         <form method="post" action={`/admin/programs/${program.id}/activities/${editingActivityId}/delete`}>
-          <button type="submit" class="link-button link-button--danger" onclick="return confirm('Διαγραφή δράσης;');">
-            Διαγραφή δράσης
+          <button
+            type="submit"
+            class="icon-btn icon-btn--danger"
+            title="Διαγραφή δράσης"
+            aria-label="Διαγραφή δράσης"
+            onclick="return confirm('Διαγραφή δράσης;');"
+          >
+            🗑
           </button>
         </form>
       )}

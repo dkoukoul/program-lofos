@@ -4,6 +4,7 @@ import { csrf } from "hono/csrf";
 import { syncLeadersFromConfig } from "./db/syncLeaders";
 import admin from "./routes/admin";
 import auth from "./routes/auth";
+import ical from "./routes/ical";
 import publicRoutes from "./routes/public";
 
 // Πηγή αλήθειας για ποιοι έχουν πρόσβαση είναι το config/leaders.json (§6 architecture doc) —
@@ -19,6 +20,7 @@ app.get("/healthz", (c) => c.json({ status: "ok" }));
 
 app.route("/auth", auth);
 app.route("/admin", admin);
+app.route("/ical", ical);
 app.route("/", publicRoutes);
 
 const port = Number(process.env.PORT ?? 3010);

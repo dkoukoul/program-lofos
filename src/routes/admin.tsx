@@ -17,17 +17,20 @@ import {
   type SystemNote,
 } from "../db/schema";
 import { requireAuth } from "../lib/auth";
-import { requireProgramAccess } from "../lib/authorize";
+import { requireProgramAccess, requireSystemStaff } from "../lib/authorize";
 import {
+  changeGroupsOf,
   checkOverlapPolicy,
   diffChangedFields,
   findOverlap,
   nextAvailableSundays,
   typeDefaults,
+  unhideReChangedGroups,
 } from "../lib/activities";
 import { attachActivityExtras, getProgramNotes } from "../lib/notes";
 import { sendProgramChangedEmail, sendProgramPublishedEmail, sendSystemNoteChangedEmail } from "../lib/notify";
 import { ActivityRow, ActivityRowEditForm, AdminHomePage, rowLabels, type HomeSortColumn, type SortDir } from "../views/admin/home";
+import { ActivityChangeBadges } from "../views/admin/change-badges";
 import { HelpPage } from "../views/admin/help";
 import { NOTE_TEXT_MAX, SystemNoteFormPage, noteFormValues } from "../views/admin/notes";
 import { ProgramForm, ProgramsIndexPage } from "../views/admin/programs";
@@ -289,6 +292,8 @@ admin.get("/", async (c) => {
   const leader = c.get("leader");
   const sectionFilter = c.req.query("section") ?? "all";
   const monthFilter = c.req.query("month") ?? "all";
+  const typeFilter = c.req.query("type") ?? "all";
+  const statusFilter = c.req.query("status") ?? "all";
   const sortParam = c.req.query("sort") ?? "date";
   const sort: HomeSortColumn = isHomeSortColumn(sortParam) ? sortParam : "date";
   const dir: SortDir = c.req.query("dir") === "desc" ? "desc" : "asc";
@@ -321,6 +326,8 @@ admin.get("/", async (c) => {
       sectionsById={sectionsById}
       sectionFilter={sectionFilter}
       monthFilter={monthFilter}
+      typeFilter={typeFilter}
+      statusFilter={statusFilter}
       sort={sort}
       dir={dir}
     />,
@@ -958,10 +965,20 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
     program.status === "published"
       ? diffChangedFields(before, after, before.changedAfterPublishFields ?? [])
       : (before.changedAfterPublishFields ?? []);
+  const hiddenChangeGroups =
+    program.status === "published"
+      ? unhideReChangedGroups(before, after, before.hiddenChangeGroups ?? [])
+      : (before.hiddenChangeGroups ?? []);
 
   await db
     .update(activities)
-    .set({ type: data.type, ...after, changedAfterPublishFields: changedFields, updatedAt: new Date() })
+    .set({
+      type: data.type,
+      ...after,
+      changedAfterPublishFields: changedFields,
+      hiddenChangeGroups,
+      updatedAt: new Date(),
+    })
     .where(eq(activities.id, activityId));
 
   if (data.type !== "no_activity") {
@@ -1042,6 +1059,10 @@ admin.post("/programs/:id/activities/:activityId/quick-edit", async (c) => {
       program.status === "published"
         ? diffChangedFields(before, after, before.changedAfterPublishFields ?? [])
         : (before.changedAfterPublishFields ?? []);
+    const hiddenChangeGroups =
+      program.status === "published"
+        ? unhideReChangedGroups(before, after, before.hiddenChangeGroups ?? [])
+        : (before.hiddenChangeGroups ?? []);
 
     await db
       .update(activities)
@@ -1052,6 +1073,7 @@ admin.post("/programs/:id/activities/:activityId/quick-edit", async (c) => {
         startsAt: after.startsAt,
         endsAt: after.endsAt,
         changedAfterPublishFields: changedFields,
+        hiddenChangeGroups,
         updatedAt: new Date(),
       })
       .where(eq(activities.id, activityId));
@@ -1066,6 +1088,39 @@ admin.post("/programs/:id/activities/:activityId/quick-edit", async (c) => {
   const updated = (await loadOwnActivity(program, activityId))!;
   const row = { activity: updated, program };
   return c.html(<ActivityRow row={row} {...rowLabels(row, sectionsById)} />);
+});
+
+/**
+ * Απόκρυψη/επαναφορά μιας ετικέτας αλλαγής από το δημόσιο πρόγραμμα (purpose doc §5.4).
+ * Μόνο επιτελείο: το `requireSystemStaff` είναι ο πραγματικός έλεγχος — τα κουμπιά που
+ * δεν δείχνουμε στον βαθμοφόρο τμήματος είναι απλώς UI (§6 architecture doc).
+ */
+admin.post("/programs/:id/activities/:activityId/changes/:group/toggle", requireSystemStaff, async (c) => {
+  const leader = c.get("leader");
+  const program = c.get("program");
+  const activityId = Number(c.req.param("activityId"));
+  const group = c.req.param("group") ?? "";
+
+  const activity = await loadOwnActivity(program, activityId);
+  if (!activity) return c.notFound();
+
+  // Μόνο ομάδα που όντως αντιστοιχεί σε καταγεγραμμένη αλλαγή — αλλιώς ένα χειροποίητο
+  // request θα γέμιζε το `hiddenChangeGroups` με άσχετα κλειδιά.
+  if (!changeGroupsOf(activity.changedAfterPublishFields ?? []).includes(group)) {
+    return c.text("Άγνωστη ετικέτα αλλαγής.", 404);
+  }
+
+  const hidden = activity.hiddenChangeGroups ?? [];
+  const hiddenChangeGroups = hidden.includes(group)
+    ? hidden.filter((g) => g !== group)
+    : [...hidden, group];
+
+  await db
+    .update(activities)
+    .set({ hiddenChangeGroups, updatedAt: new Date() })
+    .where(eq(activities.id, activityId));
+
+  return c.html(<ActivityChangeBadges activity={{ ...activity, hiddenChangeGroups }} leader={leader} />);
 });
 
 admin.post("/programs/:id/activities/:activityId/delete", async (c) => {

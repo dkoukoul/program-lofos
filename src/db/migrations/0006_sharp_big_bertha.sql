@@ -1,0 +1,1 @@
+ALTER TABLE `activities` ADD `hidden_change_groups` text;

@@ -6,7 +6,7 @@ import { magicLinkEmail } from "../emails/magic-link";
 import { programChangedEmail } from "../emails/program-changed";
 import { programPublishedEmail } from "../emails/program-published";
 import { systemNoteChangedEmail } from "../emails/system-note-changed";
-import { CHANGED_FIELD_LABELS, SECTION_LABELS, formatActivityDate, formatPeriod } from "../views/public/layout";
+import { changedFieldLabels, SECTION_LABELS, formatActivityDate, formatPeriod } from "../views/public/layout";
 import { formatNoteRange } from "./notes";
 
 const FROM_ADDRESS = "program.lofos.gr <no-reply@program.lofos.gr>";
@@ -83,9 +83,7 @@ export async function sendProgramChangedEmail(
   if (recipients.length === 0) return;
 
   const { label, path } = await sectionContext(program.sectionId);
-  const changedLabels = (activity.changedAfterPublishFields ?? []).map(
-    (field) => CHANGED_FIELD_LABELS[field] ?? "Άλλαξε κάτι",
-  );
+  const changedLabels = changedFieldLabels(activity.changedAfterPublishFields ?? []);
 
   const { subject, html } = programChangedEmail({
     sectionLabel: label,

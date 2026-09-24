@@ -1,4 +1,5 @@
 import type { activities, sections, SystemNote } from "../../db/schema";
+import { changeGroupsOf, visibleChangeGroups } from "../../lib/activities";
 import type { ActivityCustomField, DetailedActivity } from "../../lib/notes";
 import { LoginForm } from "../admin/login";
 
@@ -74,20 +75,30 @@ export const ACTIVITY_TYPE_INFO: Record<ActivityRow["type"], { icon: string; lab
   no_activity: { icon: "🚫", label: "Χωρίς δράση" },
 };
 
-export const CHANGED_FIELD_LABELS: Record<string, string> = {
+/** Κείμενο ετικέτας ανά ομάδα αλλαγής (βλ. `changeGroupOf`, lib/activities.ts). */
+export const CHANGE_GROUP_LABELS: Record<string, string> = {
+  date: "Άλλαξε η ημερομηνία",
   location: "Άλλαξε η τοποθεσία",
-  locationLat: "Άλλαξε η τοποθεσία",
-  locationLng: "Άλλαξε η τοποθεσία",
   startsAt: "Άλλαξε η ώρα έναρξης",
   endsAt: "Άλλαξε η ώρα λήξης",
-  date: "Άλλαξε η ημερομηνία",
   cost: "Άλλαξε το κόστος",
   whatToBring: "Άλλαξε τι να κρατάνε",
 };
 
+export function changeGroupLabel(group: string): string {
+  return CHANGE_GROUP_LABELS[group] ?? "Άλλαξε κάτι";
+}
+
 /** Ετικέτες αλλαγμένων πεδίων, deduped (π.χ. `location`+`locationLat`+`locationLng` μαζί → μία ετικέτα "Άλλαξε η τοποθεσία"). */
 export function changedFieldLabels(changedFields: string[]): string[] {
-  return [...new Set(changedFields.map((field) => CHANGED_FIELD_LABELS[field] ?? "Άλλαξε κάτι"))];
+  return changeGroupsOf(changedFields).map(changeGroupLabel);
+}
+
+/** Μόνο οι ετικέτες που επιτρέπεται να δει ο επισκέπτης — χωρίς όσες έκρυψε το επιτελείο (purpose doc §5.4). */
+export function visibleChangeLabels(
+  activity: Pick<ActivityRow, "changedAfterPublishFields" | "hiddenChangeGroups">,
+): string[] {
+  return visibleChangeGroups(activity).map(changeGroupLabel);
 }
 
 /** Google Maps link για προαιρετικές συντεταγμένες τοποθεσίας δράσης. */
@@ -187,7 +198,7 @@ export function ActivitySystemNotes({ notes }: { notes: SystemNote[] }) {
 
 export function ActivityCard({ activity }: { activity: DetailedActivity }) {
   const typeInfo = ACTIVITY_TYPE_INFO[activity.type];
-  const changedFields = activity.changedAfterPublishFields ?? [];
+  const changeLabels = visibleChangeLabels(activity);
 
   if (activity.type === "no_activity") {
     return (
@@ -209,7 +220,7 @@ export function ActivityCard({ activity }: { activity: DetailedActivity }) {
             {typeInfo.icon} {typeInfo.label}
           </span>
           {activity.isSystemWide && <span class="badge badge-system">🛡️ Δράση Συστήματος</span>}
-          {changedFieldLabels(changedFields).map((label) => (
+          {changeLabels.map((label) => (
             <span class="badge badge-changed">✏️ {label}</span>
           ))}
         </div>
@@ -414,19 +425,6 @@ export function SectionSchedulePage({
         {program && <p class="period">{formatPeriod(program.periodStart, program.periodEnd)}</p>}
       </section>
 
-      <section class="ical-subscribe">
-        <a class="btn-ical" href={icalWebcalUrl(section)}>
-          📅 Πρόσθεσε στο ημερολόγιο του κινητού σου
-        </a>
-        <p class="ical-subscribe-hint">
-          Το πρόγραμμα της {label} ενημερώνεται αυτόματα στο ημερολόγιό σου. Αν το κουμπί δεν ανοίξει το
-          ημερολόγιο, αντέγραψε το link:{" "}
-          <a href={icalFeedUrl(section)} class="ical-subscribe-link">
-            {icalFeedUrl(section)}
-          </a>
-        </p>
-      </section>
-
       {!program ? (
         <p class="empty-state">Δεν υπάρχει ακόμα δημοσιευμένο πρόγραμμα για την {label}.</p>
       ) : scheduleActivities.length === 0 ? (
@@ -438,6 +436,15 @@ export function SectionSchedulePage({
           ))}
         </ul>
       )}
+
+      <section class="ical-subscribe">
+        <a class="btn-ical" href={icalWebcalUrl(section)}>
+          📅 Πρόσθεσε στο ημερολόγιο του κινητού σου
+        </a>
+        <p class="ical-subscribe-hint">
+          Το πρόγραμμα της {label} ενημερώνεται αυτόματα στο ημερολόγιό σου.
+        </p>
+      </section>
 
       <SectionDocuments type={variant.type} />
     </PublicLayout>

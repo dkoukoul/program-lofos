@@ -81,6 +81,11 @@ export const activities = sqliteTable("activities", {
   cost: text("cost"),
   whatToBring: text("what_to_bring"),
   changedAfterPublishFields: text("changed_after_publish_fields", { mode: "json" }).$type<string[]>(),
+  // Ομάδες ετικετών αλλαγής (π.χ. "location", "startsAt") που το επιτελείο επέλεξε να ΜΗΝ
+  // φαίνονται ως κόκκινη ετικέτα στο δημόσιο πρόγραμμα (purpose doc §5.4). Η αλλαγή μένει
+  // καταγεγραμμένη στο `changedAfterPublishFields` — κρύβεται μόνο η προβολή της, και
+  // επανεμφανίζεται αυτόματα αν το ίδιο πεδίο ξαναλλάξει μετά τη δημοσίευση.
+  hiddenChangeGroups: text("hidden_change_groups", { mode: "json" }).$type<string[]>(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
 });

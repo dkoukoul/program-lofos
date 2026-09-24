@@ -1,10 +1,13 @@
 import { describe, test, expect } from "bun:test";
 import {
+  changeGroupsOf,
   checkOverlapPolicy,
   diffChangedFields,
   findOverlap,
   nextAvailableSundays,
   typeDefaults,
+  unhideReChangedGroups,
+  visibleChangeGroups,
 } from "./activities";
 
 describe("typeDefaults", () => {
@@ -117,5 +120,70 @@ describe("diffChangedFields", () => {
   test("εντοπίζει αλλαγή συντεταγμένων ακόμα κι όταν το κείμενο τοποθεσίας μένει ίδιο", () => {
     const after = { ...base, locationLat: 35.3387, locationLng: 25.1442 };
     expect(diffChangedFields(base, after).sort()).toEqual(["locationLat", "locationLng"].sort());
+  });
+});
+
+describe("changeGroupsOf", () => {
+  test("τα τρία πεδία τοποθεσίας δίνουν μία ομάδα", () => {
+    expect(changeGroupsOf(["location", "locationLat", "locationLng"])).toEqual(["location"]);
+  });
+
+  test("κρατάει τη σειρά εμφάνισης και δεν διπλασιάζει", () => {
+    expect(changeGroupsOf(["startsAt", "location", "locationLat", "startsAt"])).toEqual([
+      "startsAt",
+      "location",
+    ]);
+  });
+
+  test("άγνωστο πεδίο πέφτει στην ομάδα \"other\"", () => {
+    expect(changeGroupsOf(["κάτι-παλιό"])).toEqual(["other"]);
+  });
+});
+
+describe("visibleChangeGroups", () => {
+  test("χωρίς αποκρύψεις, όλες οι ομάδες είναι ορατές", () => {
+    expect(
+      visibleChangeGroups({ changedAfterPublishFields: ["location", "cost"], hiddenChangeGroups: null }),
+    ).toEqual(["location", "cost"]);
+  });
+
+  test("κρυμμένη ομάδα δεν φτάνει στον επισκέπτη", () => {
+    expect(
+      visibleChangeGroups({
+        changedAfterPublishFields: ["location", "locationLat", "cost"],
+        hiddenChangeGroups: ["location"],
+      }),
+    ).toEqual(["cost"]);
+  });
+
+  test("δράση χωρίς καταγεγραμμένες αλλαγές -> καμία ετικέτα", () => {
+    expect(visibleChangeGroups({ changedAfterPublishFields: null, hiddenChangeGroups: ["location"] })).toEqual([]);
+  });
+});
+
+describe("unhideReChangedGroups", () => {
+  const base = {
+    date: new Date(2026, 6, 12),
+    location: "Λόφος",
+    locationLat: null,
+    locationLng: null,
+    startsAt: new Date(2026, 6, 12, 11, 0),
+    endsAt: new Date(2026, 6, 12, 13, 0),
+    cost: null,
+    whatToBring: "παγούρι",
+  };
+
+  test("νέα αλλαγή στο ίδιο πεδίο επαναφέρει την κρυμμένη ετικέτα", () => {
+    const after = { ...base, location: "Πλατεία" };
+    expect(unhideReChangedGroups(base, after, ["location", "cost"])).toEqual(["cost"]);
+  });
+
+  test("αλλαγή συντεταγμένων επαναφέρει την ετικέτα τοποθεσίας", () => {
+    const after = { ...base, locationLat: 35.3387, locationLng: 25.1442 };
+    expect(unhideReChangedGroups(base, after, ["location"])).toEqual([]);
+  });
+
+  test("χωρίς νέα αλλαγή, οι αποκρύψεις μένουν ως έχουν", () => {
+    expect(unhideReChangedGroups(base, { ...base }, ["location"])).toEqual(["location"]);
   });
 });

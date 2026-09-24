@@ -605,6 +605,76 @@ describe("Αρχική διαχειριστικού (/admin)", () => {
     expect(laterIdx).toBeLessThan(earlierIdx);
   });
 
+  test("φίλτρο τύπου και κατάστασης περιορίζει τις γραμμές", async () => {
+    const section = await makeSection("agele");
+    const draftProgram = await makeProgram(section.id);
+    const publishedProgram = await makeProgram(section.id, { status: "published" });
+
+    await db.insert(activities).values([
+      {
+        programId: draftProgram.id,
+        type: "typical",
+        date: new Date(2026, 6, 4),
+        location: "FILTER-ΤΥΠΙΚΗ-ΠΡΟΧΕΙΡΟ",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        programId: publishedProgram.id,
+        type: "day_trip",
+        date: new Date(2026, 6, 11),
+        location: "FILTER-ΗΜΕΡΗΣΙΑ-ΔΗΜΟΣΙΕΥΜΕΝΟ",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const cookie = await cookieFor(leader);
+
+    const byType = await app.request("/admin?type=day_trip", { headers: { cookie } });
+    const byTypeHtml = await byType.text();
+    expect(byTypeHtml).toContain("FILTER-ΗΜΕΡΗΣΙΑ-ΔΗΜΟΣΙΕΥΜΕΝΟ");
+    expect(byTypeHtml).not.toContain("FILTER-ΤΥΠΙΚΗ-ΠΡΟΧΕΙΡΟ");
+
+    const byStatus = await app.request("/admin?status=draft", { headers: { cookie } });
+    const byStatusHtml = await byStatus.text();
+    expect(byStatusHtml).toContain("FILTER-ΤΥΠΙΚΗ-ΠΡΟΧΕΙΡΟ");
+    expect(byStatusHtml).not.toContain("FILTER-ΗΜΕΡΗΣΙΑ-ΔΗΜΟΣΙΕΥΜΕΝΟ");
+  });
+
+  test("κάθε γραμμή φέρει την κλάση χρώματος του τμήματός της", async () => {
+    const sectionA = await makeSection("agele");
+    const systemProgram = await makeProgram(null);
+    const agelProgram = await makeProgram(sectionA.id);
+
+    await db.insert(activities).values([
+      {
+        programId: agelProgram.id,
+        type: "typical",
+        date: new Date(2026, 6, 4),
+        location: "ΧΡΩΜΑ-ΑΓΕΛΗ",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+      {
+        programId: systemProgram.id,
+        type: "other",
+        date: new Date(2026, 6, 5),
+        location: "ΧΡΩΜΑ-ΣΥΣΤΗΜΑ",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      },
+    ]);
+
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const cookie = await cookieFor(staff);
+
+    const html = await (await app.request("/admin", { headers: { cookie } })).text();
+    expect(html).toContain("home-row home-row--agele");
+    expect(html).toContain("home-row home-row--system");
+  });
+
   test("χωρίς session -> redirect στο login", async () => {
     const res = await app.request("/admin");
     expect(res.status).toBe(302);
@@ -950,5 +1020,112 @@ describe("Σημειώσεις Συστήματος", () => {
     const res = await app.request(`/admin/programs/${sectionProgram.id}`, { headers: { cookie } });
     expect(res.status).toBe(200);
     expect(await res.text()).toContain("Αγιασμός στον Άγιο Μηνά");
+  });
+});
+
+describe("Ετικέτες αλλαγής: απόκρυψη/επαναφορά (μόνο επιτελείο)", () => {
+  async function makeChangedActivity(programId: number, changedFields: string[] = ["location"]) {
+    const [activity] = await db
+      .insert(activities)
+      .values({
+        programId,
+        type: "typical",
+        date: new Date(2026, 6, 5),
+        location: "Λόφος",
+        startsAt: new Date(2026, 6, 5, 11, 0),
+        endsAt: new Date(2026, 6, 5, 13, 0),
+        changedAfterPublishFields: changedFields,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    return activity!;
+  }
+
+  function toggleUrl(programId: number, activityId: number, group: string) {
+    return `/admin/programs/${programId}/activities/${activityId}/changes/${group}/toggle`;
+  }
+
+  test("system_staff κρύβει μια ετικέτα και την επαναφέρει με δεύτερο toggle", async () => {
+    const section = await makeSection("agele");
+    const program = await makeProgram(section.id, { status: "published" });
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const cookie = await cookieFor(staff);
+    const activity = await makeChangedActivity(program.id, ["location", "locationLat", "cost"]);
+
+    const hide = await app.request(toggleUrl(program.id, activity.id, "location"), { method: "POST", headers: { cookie } });
+    expect(hide.status).toBe(200);
+    const [hidden] = await db.select().from(activities).where(eq(activities.id, activity.id));
+    expect(hidden?.hiddenChangeGroups).toEqual(["location"]);
+
+    const restore = await app.request(toggleUrl(program.id, activity.id, "location"), { method: "POST", headers: { cookie } });
+    expect(restore.status).toBe(200);
+    const [restored] = await db.select().from(activities).where(eq(activities.id, activity.id));
+    expect(restored?.hiddenChangeGroups).toEqual([]);
+  });
+
+  test("section_leader δεν μπορεί να κρύψει ετικέτα (403) ούτε στο δικό του πρόγραμμα", async () => {
+    const section = await makeSection("omada");
+    const program = await makeProgram(section.id, { status: "published" });
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const cookie = await cookieFor(leader);
+    const activity = await makeChangedActivity(program.id);
+
+    const res = await app.request(toggleUrl(program.id, activity.id, "location"), { method: "POST", headers: { cookie } });
+    expect(res.status).toBe(403);
+
+    const [unchanged] = await db.select().from(activities).where(eq(activities.id, activity.id));
+    expect(unchanged?.hiddenChangeGroups).toBeNull();
+  });
+
+  test("ομάδα που δεν αντιστοιχεί σε καταγεγραμμένη αλλαγή -> 404", async () => {
+    const section = await makeSection("koinotita");
+    const program = await makeProgram(section.id, { status: "published" });
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const cookie = await cookieFor(staff);
+    const activity = await makeChangedActivity(program.id, ["location"]);
+
+    const res = await app.request(toggleUrl(program.id, activity.id, "cost"), { method: "POST", headers: { cookie } });
+    expect(res.status).toBe(404);
+
+    const [unchanged] = await db.select().from(activities).where(eq(activities.id, activity.id));
+    expect(unchanged?.hiddenChangeGroups).toBeNull();
+  });
+
+  test("νέα αλλαγή στο ίδιο πεδίο επαναφέρει την κρυμμένη ετικέτα", async () => {
+    const section = await makeSection("agele");
+    const program = await makeProgram(section.id, { status: "published" });
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const cookie = await cookieFor(staff);
+    const activity = await makeChangedActivity(program.id, ["location"]);
+
+    await app.request(toggleUrl(program.id, activity.id, "location"), { method: "POST", headers: { cookie } });
+
+    await app.request(`/admin/programs/${program.id}/activities/${activity.id}/quick-edit`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ location: "Πλατεία Ελευθερίας", startTime: "11:00", endTime: "13:00" }),
+    });
+
+    const [updated] = await db.select().from(activities).where(eq(activities.id, activity.id));
+    expect(updated?.hiddenChangeGroups).toEqual([]);
+  });
+
+  test("η οθόνη προγράμματος δείχνει κουμπιά toggle στο επιτελείο, απλές ενδείξεις στον βαθμοφόρο", async () => {
+    const section = await makeSection("omada");
+    const program = await makeProgram(section.id, { status: "published" });
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const activity = await makeChangedActivity(program.id, ["location"]);
+
+    const staffRes = await app.request(`/admin/programs/${program.id}`, { headers: { cookie: await cookieFor(staff) } });
+    const staffHtml = await staffRes.text();
+    expect(staffHtml).toContain("Άλλαξε η τοποθεσία");
+    expect(staffHtml).toContain(toggleUrl(program.id, activity.id, "location"));
+
+    const leaderRes = await app.request(`/admin/programs/${program.id}`, { headers: { cookie: await cookieFor(leader) } });
+    const leaderHtml = await leaderRes.text();
+    expect(leaderHtml).toContain("Άλλαξε η τοποθεσία");
+    expect(leaderHtml).not.toContain(toggleUrl(program.id, activity.id, "location"));
   });
 });

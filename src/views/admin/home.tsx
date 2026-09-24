@@ -7,6 +7,9 @@ import { InfoTip } from "./info-tip";
 type SectionRow = typeof sections.$inferSelect;
 type SectionType = SectionRow["type"];
 
+/** Σε ποιο τμήμα ανήκει μια γραμμή — "system" για τα προγράμματα Συστήματος (sectionId === null). */
+export type SectionKind = "system" | SectionType;
+
 const STATUS_LABELS: Record<Program["status"], string> = {
   draft: "Πρόχειρο",
   published: "Δημοσιευμένο",
@@ -25,9 +28,12 @@ const COLUMNS: { key: HomeSortColumn; label: string }[] = [
   { key: "status", label: "Κατάσταση" },
 ];
 
+/** Σειρά εμφάνισης των τύπων δράσης στο φίλτρο — ίδια με τη σειρά του wizard. */
+const ACTIVITY_TYPES = ["typical", "day_trip", "multi_day", "other", "no_activity"] as const;
+
 const monthLabelFormatter = new Intl.DateTimeFormat("el-GR", { month: "long", year: "numeric" });
 
-function sectionKey(program: Program, sectionsById: Map<number, SectionRow>): "system" | SectionType {
+function sectionKey(program: Program, sectionsById: Map<number, SectionRow>): SectionKind {
   return program.sectionId === null ? "system" : sectionsById.get(program.sectionId)!.type;
 }
 
@@ -49,11 +55,12 @@ function monthLabel(monthValue: string): string {
 export function rowLabels(
   row: HomeRow,
   sectionsById: Map<number, SectionRow>,
-): { sectionText: string; typeText: string; statusText: string } {
+): { sectionText: string; typeText: string; statusText: string; sectionKind: SectionKind } {
   return {
     sectionText: sectionLabel(row.program, sectionsById),
     typeText: ACTIVITY_TYPE_INFO[row.activity.type].label,
     statusText: STATUS_LABELS[row.program.status],
+    sectionKind: sectionKey(row.program, sectionsById),
   };
 }
 
@@ -71,18 +78,20 @@ export function ActivityRow({
   sectionText,
   typeText,
   statusText,
+  sectionKind,
 }: {
   row: HomeRow;
   sectionText: string;
   typeText: string;
   statusText: string;
+  sectionKind: SectionKind;
 }) {
   const { activity, program } = row;
   const canQuickEdit = activity.type !== "no_activity";
   const editUrl = `/admin/programs/${program.id}/activities/${activity.id}/edit`;
 
   return (
-    <tr id={`activity-row-${activity.id}`} class="home-row">
+    <tr id={`activity-row-${activity.id}`} class={`home-row home-row--${sectionKind}`}>
       <td>{formatDateNumeric(activity.date)}</td>
       <td>{sectionText}</td>
       <td>{typeText}</td>
@@ -131,16 +140,18 @@ export function ActivityRowEditForm({
   sectionText,
   typeText,
   statusText,
+  sectionKind,
 }: {
   row: HomeRow;
   sectionText: string;
   typeText: string;
   statusText: string;
+  sectionKind: SectionKind;
 }) {
   const { activity } = row;
 
   return (
-    <tr id={`activity-row-${activity.id}`} class="home-row home-row--editing">
+    <tr id={`activity-row-${activity.id}`} class={`home-row home-row--${sectionKind} home-row--editing`}>
       <td>{formatDateNumeric(activity.date)}</td>
       <td>{sectionText}</td>
       <td>{typeText}</td>
@@ -185,6 +196,8 @@ export function AdminHomePage({
   sectionsById,
   sectionFilter,
   monthFilter,
+  typeFilter,
+  statusFilter,
   sort,
   dir,
 }: {
@@ -193,6 +206,8 @@ export function AdminHomePage({
   sectionsById: Map<number, SectionRow>;
   sectionFilter: string;
   monthFilter: string;
+  typeFilter: string;
+  statusFilter: string;
   sort: HomeSortColumn;
   dir: SortDir;
 }) {
@@ -201,8 +216,13 @@ export function AdminHomePage({
   const filtered = rows.filter((r) => {
     if (sectionFilter !== "all" && sectionKey(r.program, sectionsById) !== sectionFilter) return false;
     if (monthFilter !== "all" && toMonthValue(r.activity.date) !== monthFilter) return false;
+    if (typeFilter !== "all" && r.activity.type !== typeFilter) return false;
+    if (statusFilter !== "all" && r.program.status !== statusFilter) return false;
     return true;
   });
+
+  const filtersActive =
+    sectionFilter !== "all" || monthFilter !== "all" || typeFilter !== "all" || statusFilter !== "all";
 
   const withLabels = filtered
     .map((r) => ({ ...r, ...rowLabels(r, sectionsById) }))
@@ -230,7 +250,14 @@ export function AdminHomePage({
 
   function columnHref(column: HomeSortColumn): string {
     const nextDir: SortDir = sort === column && dir === "asc" ? "desc" : "asc";
-    const params = new URLSearchParams({ section: sectionFilter, month: monthFilter, sort: column, dir: nextDir });
+    const params = new URLSearchParams({
+      section: sectionFilter,
+      month: monthFilter,
+      type: typeFilter,
+      status: statusFilter,
+      sort: column,
+      dir: nextDir,
+    });
     return `/admin?${params.toString()}`;
   }
 
@@ -279,6 +306,40 @@ export function AdminHomePage({
             ))}
           </select>
         </label>
+
+        <label>
+          Τύπος
+          <select name="type" onchange="this.form.submit()">
+            <option value="all" selected={typeFilter === "all"}>
+              Όλοι οι τύποι
+            </option>
+            {ACTIVITY_TYPES.map((type) => (
+              <option value={type} selected={typeFilter === type}>
+                {ACTIVITY_TYPE_INFO[type].label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label>
+          Κατάσταση
+          <select name="status" onchange="this.form.submit()">
+            <option value="all" selected={statusFilter === "all"}>
+              Όλες οι καταστάσεις
+            </option>
+            {(["draft", "published"] as const).map((status) => (
+              <option value={status} selected={statusFilter === status}>
+                {STATUS_LABELS[status]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        {filtersActive && (
+          <a class="home-filters-reset" href="/admin">
+            Καθαρισμός φίλτρων
+          </a>
+        )}
       </form>
 
       {withLabels.length === 0 ? (
@@ -290,9 +351,15 @@ export function AdminHomePage({
               <tr>
                 {COLUMNS.map((col) => (
                   <th aria-sort={sort === col.key ? (dir === "asc" ? "ascending" : "descending") : "none"}>
-                    <a href={columnHref(col.key)}>
+                    <a
+                      class={`home-sort${sort === col.key ? " home-sort--active" : ""}`}
+                      href={columnHref(col.key)}
+                      title={`Ταξινόμηση κατά «${col.label}»`}
+                    >
                       {col.label}
-                      {sort === col.key ? (dir === "asc" ? " ▲" : " ▼") : ""}
+                      <span class="home-sort-arrow" aria-hidden="true">
+                        {sort === col.key ? (dir === "asc" ? "▲" : "▼") : "↕"}
+                      </span>
                     </a>
                   </th>
                 ))}
@@ -304,7 +371,13 @@ export function AdminHomePage({
             </thead>
             <tbody>
               {withLabels.map((r) => (
-                <ActivityRow row={r} sectionText={r.sectionText} typeText={r.typeText} statusText={r.statusText} />
+                <ActivityRow
+                  row={r}
+                  sectionText={r.sectionText}
+                  typeText={r.typeText}
+                  statusText={r.statusText}
+                  sectionKind={r.sectionKind}
+                />
               ))}
             </tbody>
           </table>

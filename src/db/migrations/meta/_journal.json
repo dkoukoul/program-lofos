@@ -43,6 +43,13 @@
       "when": 1790243112647,
       "tag": "0005_classy_iron_patriot",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1790244949798,
+      "tag": "0006_sharp_big_bertha",
+      "breakpoints": true
     }
   ]
 }

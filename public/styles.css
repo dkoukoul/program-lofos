@@ -194,7 +194,7 @@ a {
 
 .ical-subscribe {
   text-align: center;
-  margin: 0 0 1.5rem;
+  margin: 2rem 0 0;
 }
 
 .btn-ical {
@@ -220,11 +220,6 @@ a {
   margin: 0.5rem auto 0;
   color: var(--muted);
   font-size: 0.85rem;
-}
-
-.ical-subscribe-link {
-  color: var(--section-accent);
-  word-break: break-all;
 }
 
 /* ---- Χρήσιμα έγγραφα προς λήψη (σελίδα τμήματος) ---- */
@@ -642,6 +637,54 @@ body.home main::before {
 
 .badge-changed {
   background: #fecaca;
+}
+
+/* ---- Ετικέτες αλλαγής στο διαχειριστικό: απόκρυψη/επαναφορά από το επιτελείο (purpose doc §5.4) ---- */
+
+.activity-changes {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.4rem 0;
+}
+
+/* Δική της γραμμή, ώστε οι ετικέτες από κάτω να στοιχίζονται μεταξύ τους */
+.activity-changes-label {
+  flex-basis: 100%;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.badge-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  /* ≥44px tap target (§1 ux-ui-guidelines) χωρίς να χάνεται το σχήμα "ετικέτας" */
+  min-height: 44px;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid transparent;
+  font: inherit;
+  font-size: 0.8rem;
+  color: inherit;
+  cursor: pointer;
+}
+
+.badge-toggle:hover {
+  border-color: var(--section-accent);
+}
+
+/* Κρυμμένη ετικέτα: ο βαθμοφόρος τη βλέπει, ο επισκέπτης όχι — γι' αυτό ουδέτερο χρώμα
+   ΚΑΙ διαγράμμιση, όχι μόνο χρώμα (προσβασιμότητα, §3.1 ux-ui-guidelines). */
+.badge-changed--hidden {
+  background: #e2e8f0;
+  color: var(--muted);
+  text-decoration: line-through;
+}
+
+.badge-changed-state {
+  text-decoration: none;
+  font-weight: 700;
 }
 
 .activity-time,
@@ -1532,6 +1575,36 @@ form.program-form {
   white-space: nowrap;
 }
 
+.home-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+
+.home-sort:hover {
+  text-decoration: underline;
+}
+
+/* Ουδέτερο βελάκι σε κάθε στήλη: δείχνει ότι όλες ταξινομούνται, χωρίς να ανταγωνίζεται το ενεργό. */
+.home-sort-arrow {
+  font-size: 0.75rem;
+  opacity: 0.35;
+}
+
+.home-sort--active .home-sort-arrow {
+  opacity: 1;
+  color: var(--section-accent);
+}
+
+.home-filters-reset {
+  align-self: center;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.9rem;
+  color: var(--section-accent);
+}
+
 .home-table-actions-header {
   text-align: right;
 }
@@ -1540,25 +1613,52 @@ form.program-form {
   transition: background-color 0.12s ease;
 }
 
-.home-table tbody tr:nth-child(odd) {
-  background: var(--bg);
-}
-
-.home-table tbody tr:nth-child(even) {
-  background: var(--card-bg);
-}
-
 .home-table tbody tr:not(:last-child) td {
   border-bottom: 1px solid var(--border);
 }
 
-.home-table tbody tr:hover {
-  background: #eff6ff;
+/* Χρώμα γραμμής ανά τμήμα — ίδια οικογένεια χρωμάτων με τα δημόσια themes (βλ. body.theme-*),
+   σε πολύ ανοιχτή απόχρωση ώστε το μαύρο κείμενο να κρατά αντίθεση. Το χρώμα είναι ενίσχυση,
+   όχι η μόνη ένδειξη: η στήλη «Τμήμα» παραμένει η πηγή αλήθειας. */
+.home-row--agele {
+  --row-tint: #fefce8;
+  --row-tint-hover: #fef08a;
+  --row-accent: #eab308;
+}
+
+.home-row--omada {
+  --row-tint: #f0fdf4;
+  --row-tint-hover: #bbf7d0;
+  --row-accent: #16a34a;
+}
+
+.home-row--koinotita {
+  --row-tint: #fef2f2;
+  --row-tint-hover: #fecaca;
+  --row-accent: #dc2626;
+}
+
+.home-row--system {
+  --row-tint: #eff6ff;
+  --row-tint-hover: #bfdbfe;
+  --row-accent: #2563eb;
+}
+
+.home-table tbody tr.home-row {
+  background: var(--row-tint, var(--card-bg));
+}
+
+.home-table tbody tr.home-row:hover {
+  background: var(--row-tint-hover, #e2e8f0);
+}
+
+.home-row td:first-child {
+  border-left: 5px solid var(--row-accent, transparent);
 }
 
 .home-table tbody tr.home-row--editing,
 .home-table tbody tr.home-row--editing:hover {
-  background: #dbeafe;
+  background: var(--row-tint-hover, #dbeafe);
 }
 
 .home-row td:nth-child(4) {

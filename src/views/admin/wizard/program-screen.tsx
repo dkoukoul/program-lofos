@@ -4,13 +4,13 @@ import {
   ACTIVITY_TYPE_INFO,
   ActivityCustomFields,
   ActivitySystemNotes,
-  changedFieldLabels,
   formatActivityDate,
   formatActivityTime,
   formatPeriod,
   googleMapsUrl,
 } from "../../public/layout";
 import { AdminLayout } from "../layout";
+import { ActivityChangeBadges } from "../change-badges";
 import { InfoTip } from "../info-tip";
 import { SystemNotesPanel } from "../notes";
 
@@ -19,9 +19,8 @@ const STATUS_LABELS: Record<Program["status"], string> = {
   published: "Δημοσιευμένο",
 };
 
-function AdminActivityCard({ activity }: { activity: DetailedActivity }) {
+function AdminActivityCard({ activity, leader }: { activity: DetailedActivity; leader: Leader }) {
   const typeInfo = ACTIVITY_TYPE_INFO[activity.type];
-  const changedFields = activity.changedAfterPublishFields ?? [];
   const editUrl = `/admin/programs/${activity.programId}/activities/${activity.id}/edit`;
 
   return (
@@ -33,9 +32,6 @@ function AdminActivityCard({ activity }: { activity: DetailedActivity }) {
             {typeInfo.icon} {typeInfo.label}
           </span>
           {activity.isSystemWide && <span class="badge badge-system">🛡️ Δράση Συστήματος</span>}
-          {changedFieldLabels(changedFields).map((label) => (
-            <span class="badge badge-changed">✏️ {label}</span>
-          ))}
         </div>
         {(activity.startsAt || activity.endsAt) && (
           <p class="activity-time">
@@ -44,6 +40,8 @@ function AdminActivityCard({ activity }: { activity: DetailedActivity }) {
           </p>
         )}
       </a>
+      {/* Εκτός του <a> του edit-link: τα toggles απόκρυψης είναι κουμπιά, δεν μπορούν να ζουν μέσα σε link. */}
+      <ActivityChangeBadges activity={activity} leader={leader} />
       {/* Εκτός του <a> του edit-link: ένα <a> Google Maps δεν μπορεί να είναι εμφωλευμένο μέσα σε άλλο <a>. */}
       {activity.location &&
         (activity.locationLat != null && activity.locationLng != null ? (
@@ -140,7 +138,7 @@ export function ProgramScreen({
       ) : (
         <ul class="activity-list">
           {activitiesList.map((activity) => (
-            <AdminActivityCard activity={activity} />
+            <AdminActivityCard activity={activity} leader={leader} />
           ))}
         </ul>
       )}

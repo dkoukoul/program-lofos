@@ -89,6 +89,13 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   return (a ?? null) === (b ?? null);
 }
 
+function newlyChangedFields(
+  before: Pick<ActivityRow, TrackedField>,
+  after: Pick<ActivityRow, TrackedField>,
+): TrackedField[] {
+  return TRACKED_FIELDS.filter((field) => !valuesEqual(before[field], after[field]));
+}
+
 /**
  * Ονόματα πεδίων που πραγματικά άλλαξαν σε σχέση με πριν, ενωμένα (unique) με
  * όσα ήδη ήταν σημειωμένα ως αλλαγμένα (purpose doc §5.4 — δεν καθαρίζει ποτέ
@@ -99,6 +106,54 @@ export function diffChangedFields(
   after: Pick<ActivityRow, TrackedField>,
   existingChangedFields: string[] = [],
 ): string[] {
-  const newlyChanged = TRACKED_FIELDS.filter((field) => !valuesEqual(before[field], after[field]));
-  return [...new Set([...existingChangedFields, ...newlyChanged])];
+  return [...new Set([...existingChangedFields, ...newlyChangedFields(before, after)])];
+}
+
+/**
+ * Πολλά πεδία → μία ορατή ετικέτα αλλαγής: το κλειδί ομάδας είναι η μονάδα που κρύβει
+ * ή επαναφέρει το επιτελείο (purpose doc §5.4), γι' αυτό οι τρεις στήλες τοποθεσίας
+ * μοιράζονται το ίδιο κλειδί — δεν έχει νόημα να κρυφτεί το "location" και να μείνει
+ * ορατό το "locationLat", αφού δείχνουν την ίδια ετικέτα στον επισκέπτη.
+ */
+const CHANGE_GROUP_BY_FIELD: Record<string, string> = {
+  date: "date",
+  location: "location",
+  locationLat: "location",
+  locationLng: "location",
+  startsAt: "startsAt",
+  endsAt: "endsAt",
+  cost: "cost",
+  whatToBring: "whatToBring",
+};
+
+/** Κλειδί ομάδας ετικέτας για ένα πεδίο· άγνωστο πεδίο (π.χ. από παλιά δεδομένα) → "other". */
+export function changeGroupOf(field: string): string {
+  return CHANGE_GROUP_BY_FIELD[field] ?? "other";
+}
+
+/** Τα κλειδιά ομάδων των αλλαγμένων πεδίων, unique και με τη σειρά που εμφανίστηκαν. */
+export function changeGroupsOf(changedFields: string[]): string[] {
+  return [...new Set(changedFields.map(changeGroupOf))];
+}
+
+/**
+ * Οι ομάδες που πρέπει να πάψουν να είναι κρυμμένες επειδή το πεδίο τους ξαναλλάξει:
+ * μια νέα αλλαγή είναι νέα πληροφορία για τον επισκέπτη, άρα ακυρώνει προηγούμενη
+ * απόκρυψη από το επιτελείο (purpose doc §5.4).
+ */
+export function unhideReChangedGroups(
+  before: Pick<ActivityRow, TrackedField>,
+  after: Pick<ActivityRow, TrackedField>,
+  hiddenGroups: string[] = [],
+): string[] {
+  const reChanged = new Set(changeGroupsOf(newlyChangedFields(before, after)));
+  return hiddenGroups.filter((group) => !reChanged.has(group));
+}
+
+/** Οι ομάδες ετικετών που βλέπει ο επισκέπτης: οι αλλαγμένες, μείον όσες έκρυψε το επιτελείο. */
+export function visibleChangeGroups(
+  activity: Pick<ActivityRow, "changedAfterPublishFields" | "hiddenChangeGroups">,
+): string[] {
+  const hidden = activity.hiddenChangeGroups ?? [];
+  return changeGroupsOf(activity.changedAfterPublishFields ?? []).filter((group) => !hidden.includes(group));
 }

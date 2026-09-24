@@ -10,7 +10,7 @@ import {
   SECTION_LOGOS,
   SECTION_ORDER,
   SECTION_VARIANTS,
-  changedFieldLabels,
+  visibleChangeLabels,
   formatDateNumeric,
   formatPeriod,
   formatTimeRange,
@@ -29,7 +29,7 @@ type SectionBlock = {
 /** Μπροστινή όψη: η τρέχουσα/επόμενη δράση με έμφαση σε ημέρα/ημερομηνία/ώρα. */
 function FeaturedActivity({ activity }: { activity: DetailedActivity }) {
   const typeInfo = ACTIVITY_TYPE_INFO[activity.type];
-  const changedFields = activity.changedAfterPublishFields ?? [];
+  const changeLabels = visibleChangeLabels(activity);
 
   if (activity.type === "no_activity") {
     return (
@@ -47,10 +47,10 @@ function FeaturedActivity({ activity }: { activity: DetailedActivity }) {
   return (
     <div class="card-featured">
       <p class="card-next-label">Επόμενη δράση</p>
-      {(activity.isSystemWide || changedFields.length > 0) && (
+      {(activity.isSystemWide || changeLabels.length > 0) && (
         <div class="activity-badges">
           {activity.isSystemWide && <span class="badge badge-system">🛡️ Δράση Συστήματος</span>}
-          {changedFieldLabels(changedFields).map((label) => (
+          {changeLabels.map((label) => (
             <span class="badge badge-changed">✏️ {label}</span>
           ))}
         </div>

@@ -1,8 +1,12 @@
 {
   "leaders": [
     { "name": "Δημήτρης Κουκουλάκης", "email": "dimitris.koukoulakis@gmail.com", "role": "system_staff", "active": true },
-    { "name": "Όνομα Επώνυμο", "email": "voithos-ageli@example.com", "role": "section_leader", "section": "agele", "active": true },
-    { "name": "Όνομα Επώνυμο", "email": "voithos-omadas@example.com", "role": "section_leader", "section": "omada", "active": true },
-    { "name": "Όνομα Επώνυμο", "email": "voithos-koinotitas@example.com", "role": "section_leader", "section": "koinotita", "active": true }
+    { "name": "Παναγιώτης Νικολαΐδης", "email": "Πpeteinos94@yahoo.gr", "role": "system_staff", "active": true },
+    { "name": "Νίκος Βαλάκος", "email": "valakosnikos@gmail.com", "role": "system_staff", "active": true },
+    { "name": "Αλεξάνδρα Γιαννακίδου", "email": "alexgiankom1@gmail.com", "role": "section_leader", "section": "omada", "active": true },
+    { "name": "Μαρία Ψαρολογάκη", "email": "mapsarologaki@gmail.com", "role": "section_leader", "section": "omada", "active": true },
+    { "name": "Μαρία Χαλκιαδάκη", "email": "chalkiadakimr@gmail.com", "role": "section_leader", "section": "agele", "active": true },
+    { "name": "Νατάσα Τζομπανάκη", "email": "natasatzo@gmail.com", "role": "section_leader", "section": "agele", "active": true },
+    { "name": "Ιωάννα Μεσσαριτάκη", "email": "ioannamessaritaki@gmail.com", "role": "section_leader", "section": "koinotita", "active": true }
   ]
 }

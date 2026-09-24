@@ -3,6 +3,7 @@ import { SECTION_LABELS } from "../public/layout";
 import { formatPeriod } from "../public/layout";
 import { AdminLayout } from "./layout";
 import { InfoTip } from "./info-tip";
+import { DateInput } from "./date-input";
 
 type SectionRow = typeof sections.$inferSelect;
 
@@ -80,10 +81,10 @@ export function ProgramForm({
       {error && <p class="error">{error}</p>}
       <form method="post" action="/admin/programs" class="program-form">
         <label for="periodStart">Έναρξη περιόδου</label>
-        <input type="date" id="periodStart" name="periodStart" required />
+        <DateInput id="periodStart" name="periodStart" required />
 
         <label for="periodEnd">Λήξη περιόδου</label>
-        <input type="date" id="periodEnd" name="periodEnd" required />
+        <DateInput id="periodEnd" name="periodEnd" required />
 
         {leader.role === "system_staff" ? (
           <>

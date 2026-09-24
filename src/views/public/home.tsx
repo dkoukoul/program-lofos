@@ -178,7 +178,7 @@ export function HomePage({
     >
       <section class="intro">
         <h1>Πρόγραμμα δράσεων</h1>
-        <p>Το πρόγραμμα του μήνα για κάθε τμήμα του 4ου Συστήματος. Γύρνα την κάρτα για το πλήρες πρόγραμμα.</p>
+        <p></p>
       </section>
 
       <div class="section-cards">

@@ -3,6 +3,7 @@ import { ACTIVITY_TYPE_INFO, formatDateNumeric, googleMapsUrl } from "../../publ
 import { typeDefaults, type ActivityTypeDefaults } from "../../../lib/activities";
 import { AdminLayout } from "../layout";
 import { InfoTip } from "../info-tip";
+import { DateInput } from "../date-input";
 import { OverlapWarning } from "./overlap-warning";
 
 type ActivityType = Activity["type"];
@@ -22,40 +23,77 @@ export function toTimeInputValue(date: Date): string {
 }
 
 const TIME_HOURS = Array.from({ length: 24 }, (_, i) => pad(i));
-const TIME_MINUTES = Array.from({ length: 60 }, (_, i) => pad(i));
+const TIME_MINUTES = Array.from({ length: 6 }, (_, i) => pad(i * 10));
+
+export function roundToNearestTenMinutes(value: string): string {
+  if (!value.includes(":")) return value;
+  const [hStr, mStr] = value.split(":");
+  const h = Number(hStr);
+  const m = Number(mStr);
+  let roundedMinutes = Math.round(m / 10) * 10;
+  let roundedHour = h;
+  if (roundedMinutes === 60) {
+    roundedMinutes = 0;
+    roundedHour = (h + 1) % 24;
+  }
+  return `${pad(roundedHour)}:${pad(roundedMinutes)}`;
+}
+
+function formatTimeDisplay(h: string, m: string): string {
+  return h && m ? `${h}:${m}` : "--:--";
+}
 
 /**
- * Δύο native <select> (ώρα/λεπτά) αντί για <input type="time">: το Firefox desktop δεν δείχνει
- * κανένα picker UI για type="time" (μόνο spinners), ενώ τα <select> δίνουν συνεπή εμφάνιση σε όλα
- * τα browsers. Ο συνδυασμός γράφεται σε κρυφό input με το ίδιο name ώστε η φόρμα/routes να μη
- * χρειάζονται αλλαγή — η συγχρονισμός γίνεται από το script στο AdminLayout.
+ * Το πεδίο δείχνει την ώρα σαν συμπαγές κουμπί (π.χ. "11:00") — πάτημα ανοίγει native <dialog> με
+ * iOS-style scroll wheel (ώρα/λεπτά) αντί για native <input type="time"> ή τα προηγούμενα inline
+ * <select>/wheel — βλ. decisions.md. Λεπτά μόνο ανά 10' (TIME_MINUTES): αν η αποθηκευμένη τιμή δεν
+ * είναι ήδη πολλαπλάσιο του 10, στρογγυλοποιείται στο κοντινότερο κατά το rendering. Κάθε ρόδα
+ * γράφει σε κοινό κρυφό input με το ίδιο name ώστε η φόρμα/routes να μη χρειάζονται καμία αλλαγή —
+ * ο συγχρονισμός/scroll-handling/άνοιγμα dialog γίνεται από το script στο AdminLayout. Κανένα
+ * global id στο dialog (θα μπορούσαν να υπάρχουν πολλά quick-edit instances ταυτόχρονα στη σελίδα)
+ * — το άνοιγμα/κλείσιμο γίνεται πάντα με σχετική πλοήγηση `closest('[data-time-input]')`.
  */
 export function TimeInput({ id, name, value }: { id?: string; name: string; value: string }) {
-  const [h, m] = value.includes(":") ? value.split(":") : ["", ""];
+  const normalized = roundToNearestTenMinutes(value);
+  const [h = "", m = ""] = normalized.includes(":") ? normalized.split(":") : ["", ""];
   return (
     <span class="time-input" data-time-input>
-      <input type="hidden" name={name} value={value} data-time-value />
-      <select id={id} aria-label="Ώρα" data-time-hour>
-        <option value="" selected={h === ""}>
-          --
-        </option>
-        {TIME_HOURS.map((hh) => (
-          <option value={hh} selected={hh === h}>
-            {hh}
-          </option>
-        ))}
-      </select>
-      <span aria-hidden="true">:</span>
-      <select aria-label="Λεπτά" data-time-minute>
-        <option value="" selected={m === ""}>
-          --
-        </option>
-        {TIME_MINUTES.map((mm) => (
-          <option value={mm} selected={mm === m}>
-            {mm}
-          </option>
-        ))}
-      </select>
+      <input type="hidden" name={name} value={normalized} data-time-value />
+      <button type="button" id={id} class="time-trigger" data-time-trigger aria-haspopup="dialog">
+        {formatTimeDisplay(h, m)}
+      </button>
+      <dialog class="time-dialog" data-time-dialog>
+        <div class="time-dialog-wheels">
+          <div class="wheel" data-wheel-hour role="listbox" aria-label="Ώρα" tabindex={0}>
+            <div class="wheel-track">
+              <div class="wheel-option" data-value="" role="option" aria-selected={h === "" ? "true" : "false"}>
+                --
+              </div>
+              {TIME_HOURS.map((hh) => (
+                <div class="wheel-option" data-value={hh} role="option" aria-selected={hh === h ? "true" : "false"}>
+                  {hh}
+                </div>
+              ))}
+            </div>
+          </div>
+          <span aria-hidden="true" class="wheel-colon">:</span>
+          <div class="wheel" data-wheel-minute role="listbox" aria-label="Λεπτά" tabindex={0}>
+            <div class="wheel-track">
+              <div class="wheel-option" data-value="" role="option" aria-selected={m === "" ? "true" : "false"}>
+                --
+              </div>
+              {TIME_MINUTES.map((mm) => (
+                <div class="wheel-option" data-value={mm} role="option" aria-selected={mm === m ? "true" : "false"}>
+                  {mm}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <button type="button" class="button button-primary time-dialog-done" data-time-dialog-done>
+          Έτοιμο
+        </button>
+      </dialog>
     </span>
   );
 }
@@ -183,16 +221,15 @@ function ActivityFields({
         <label for="whatToBring">Τι να κρατάνε</label>
         <input type="text" id="whatToBring" name="whatToBring" value={values.whatToBring} maxlength={200} />
         {participantsAvailable.length > 0 && (
-          <>
-            <label for="participantIds">Συμμετέχοντες βαθμοφόροι</label>
-            <select id="participantIds" name="participantIds" multiple size={Math.min(4, participantsAvailable.length)}>
-              {participantsAvailable.map((p) => (
-                <option value={p.id} selected={values.participantIds.includes(p.id)}>
-                  {p.name}
-                </option>
-              ))}
-            </select>
-          </>
+          <fieldset class="checkbox-group">
+            <legend>Συμμετέχοντες βαθμοφόροι</legend>
+            {participantsAvailable.map((p) => (
+              <label class="checkbox-option">
+                <input type="checkbox" name="participantIds" value={p.id} checked={values.participantIds.includes(p.id)} />
+                {p.name}
+              </label>
+            ))}
+          </fieldset>
         )}
       </details>
 
@@ -245,24 +282,25 @@ export function ActivityFormBody({
               <button
                 type="button"
                 class="chip"
-                onclick={`var d=document.getElementById('date'); d.value='${toDateInputValue(chip)}'; d.dispatchEvent(new Event('change'));`}
+                onclick={`var d=document.getElementById('date'); d.value='${toDateInputValue(chip)}'; d.dispatchEvent(new Event('change', { bubbles: true }));`}
               >
                 {formatDateNumeric(chip)}
               </button>
             ))}
           </div>
         )}
-        <input
-          type="date"
+        <DateInput
           id="date"
           name="date"
           value={toDateInputValue(values.date)}
           required
-          hx-get={checkDateUrl}
-          hx-trigger="change"
-          hx-target="#overlap-warning"
-          hx-swap="innerHTML"
-          hx-include="#date,#editingActivityId"
+          hx={{
+            "hx-get": checkDateUrl,
+            "hx-trigger": "change",
+            "hx-target": "#overlap-warning",
+            "hx-swap": "innerHTML",
+            "hx-include": "#date,#editingActivityId",
+          }}
         />
         <input type="hidden" id="editingActivityId" name="editingActivityId" value={editingActivityId ?? ""} />
         <div id="overlap-warning">
@@ -278,7 +316,7 @@ export function ActivityFormBody({
           hx-trigger="change"
           hx-target="#activity-fields"
           hx-swap="innerHTML"
-          hx-include="#type,#date"
+          hx-include="closest form"
         >
           {ACTIVITY_TYPE_ORDER.map((type) => (
             <option value={type} selected={type === values.type}>
@@ -402,6 +440,7 @@ export function ActivityFormPage({
   editingActivityId,
   title,
   participantsAvailable,
+  error,
 }: {
   leader: Leader;
   program: Program;
@@ -411,6 +450,7 @@ export function ActivityFormPage({
   editingActivityId?: number;
   title: string;
   participantsAvailable: Leader[];
+  error?: string;
 }) {
   const actionUrl = editingActivityId
     ? `/admin/programs/${program.id}/activities/${editingActivityId}`
@@ -419,6 +459,7 @@ export function ActivityFormPage({
   return (
     <AdminLayout title={title} leader={leader} extraHead={LEAFLET_HEAD}>
       <h1>{title}</h1>
+      {error && <p class="error">{error}</p>}
       <ActivityFormBody
         program={program}
         values={values}

@@ -75,10 +75,12 @@ export function ProgramScreen({
   leader,
   program,
   activitiesList,
+  error,
 }: {
   leader: Leader;
   program: Program;
   activitiesList: Activity[];
+  error?: string;
 }) {
   const label = program.sectionId === null ? "Σύστημα" : undefined;
 
@@ -103,6 +105,8 @@ export function ProgramScreen({
           )}
         </div>
       </div>
+
+      {error && <p class="error">{error}</p>}
 
       <div class="quick-actions">
         <InfoTip text="Το «+ Τυπική Κυριακή» δημιουργεί αμέσως μια τυπική δράση (11:00–13:00, Λόφος, παγούρι) στην επόμενη διαθέσιμη Κυριακή και ανοίγει σε επεξεργασία για τυχόν αλλαγές. Το «🚫 Χωρίς δράση» μαρκάρει την επόμενη Κυριακή ως χωρίς συγκέντρωση. Για κάθε άλλη περίπτωση, χρησιμοποίησε «+ Νέα δράση»." />

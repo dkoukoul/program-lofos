@@ -32,6 +32,7 @@ import {
   defaultFormValues,
   formValuesFromActivity,
   toDateInputValue,
+  type ActivityFormValues,
   type CustomFieldValue,
 } from "../views/admin/wizard/form";
 import { OverlapWarning } from "../views/admin/wizard/overlap-warning";
@@ -191,10 +192,9 @@ function str(formData: FormData, name: string): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
-async function parseActivityForm(c: { req: { formData: () => Promise<FormData> } }): Promise<
+async function parseActivityForm(formData: FormData): Promise<
   { success: true; data: ParsedActivityForm } | { success: false; error: string }
 > {
-  const formData = await c.req.formData();
   const parsed = controlFieldsSchema.safeParse({ date: str(formData, "date"), type: str(formData, "type") });
   if (!parsed.success) {
     return { success: false, error: "Δώσε έγκυρη ημερομηνία και τύπο δράσης." };
@@ -233,6 +233,42 @@ async function parseActivityForm(c: { req: { formData: () => Promise<FormData> }
       customFields,
       participantIds,
     },
+  };
+}
+
+const ACTIVITY_TYPES = ["typical", "day_trip", "multi_day", "other", "no_activity"] as const;
+
+/**
+ * Best-effort ξαναγέμισμα της φόρμας όταν το parseActivityForm αποτύχει (π.χ. tampered
+ * request) — ώστε ο χρήστης να ξαναδεί τη φόρμα με ό,τι είχε γράψει αντί για μια λευκή
+ * σελίδα με raw error text (§2.3 ux-ui-guidelines).
+ */
+function rawFormValues(formData: FormData, fallbackDate: Date): ActivityFormValues {
+  const dateStr = str(formData, "date");
+  const typeStr = str(formData, "type");
+  const latStr = str(formData, "locationLat");
+  const lngStr = str(formData, "locationLng");
+  const lat = latStr === "" ? NaN : Number(latStr);
+  const lng = lngStr === "" ? NaN : Number(lngStr);
+
+  return {
+    date: /^\d{4}-\d{2}-\d{2}$/.test(dateStr) ? parseDateOnly(dateStr) : fallbackDate,
+    type: (ACTIVITY_TYPES as readonly string[]).includes(typeStr) ? (typeStr as Activity["type"]) : "typical",
+    location: str(formData, "location").slice(0, 200),
+    locationLat: Number.isFinite(lat) ? lat : null,
+    locationLng: Number.isFinite(lng) ? lng : null,
+    startTime: str(formData, "startTime"),
+    endTime: str(formData, "endTime"),
+    cost: str(formData, "cost").slice(0, 100),
+    whatToBring: str(formData, "whatToBring").slice(0, 200),
+    customFields: [0, 1, 2].map((i) => ({
+      title: str(formData, `customFieldTitle${i}`).slice(0, 100),
+      description: str(formData, `customFieldDescription${i}`).slice(0, 1000),
+    })),
+    participantIds: formData
+      .getAll("participantIds")
+      .map((v) => Number(v))
+      .filter((n) => Number.isInteger(n)),
   };
 }
 
@@ -366,6 +402,10 @@ admin.post("/programs", async (c) => {
 admin.use("/programs/:id", requireProgramAccess);
 admin.use("/programs/:id/*", requireProgramAccess);
 
+const PROGRAM_SCREEN_ERRORS: Record<string, string> = {
+  "no-available-sunday": "Δεν υπάρχει άλλη διαθέσιμη Κυριακή σε αυτή την περίοδο — χρησιμοποίησε «+ Νέα δράση».",
+};
+
 admin.get("/programs/:id", async (c) => {
   const leader = c.get("leader");
   const program = c.get("program");
@@ -375,7 +415,10 @@ admin.get("/programs/:id", async (c) => {
     .where(eq(activities.programId, program.id))
     .orderBy(activities.date);
 
-  return c.html(<ProgramScreen leader={leader} program={program} activitiesList={activitiesList} />);
+  const errorParam = c.req.query("error");
+  const error = errorParam ? PROGRAM_SCREEN_ERRORS[errorParam] : undefined;
+
+  return c.html(<ProgramScreen leader={leader} program={program} activitiesList={activitiesList} error={error} />);
 });
 
 admin.post("/programs/:id/delete", async (c) => {
@@ -461,7 +504,32 @@ admin.get("/programs/:id/activities/fields", async (c) => {
   const type = c.req.query("type") as Activity["type"] | undefined;
   const dateParam = c.req.query("date");
   const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? parseDateOnly(dateParam) : program.periodStart;
-  const values = defaultFormValues(type ?? "typical", date);
+  const defaults = defaultFormValues(type ?? "typical", date);
+
+  // Το <select> τύπου στέλνει όλη τη φόρμα (hx-include="closest form") ώστε ό,τι έχει ήδη
+  // γραφτεί χειροκίνητα να μη σβήνεται — τα defaults του νέου τύπου γεμίζουν μόνο τα κενά πεδία.
+  const locationLatParam = c.req.query("locationLat");
+  const locationLngParam = c.req.query("locationLng");
+  const customFields: CustomFieldValue[] = [0, 1, 2].map((i) => ({
+    title: c.req.query(`customFieldTitle${i}`) ?? "",
+    description: c.req.query(`customFieldDescription${i}`) ?? "",
+  }));
+  const participantIds = (c.req.queries("participantIds") ?? [])
+    .map((v) => Number(v))
+    .filter((n) => Number.isInteger(n));
+
+  const values = {
+    ...defaults,
+    location: c.req.query("location") || defaults.location,
+    locationLat: locationLatParam ? Number(locationLatParam) : null,
+    locationLng: locationLngParam ? Number(locationLngParam) : null,
+    startTime: c.req.query("startTime") || defaults.startTime,
+    endTime: c.req.query("endTime") || defaults.endTime,
+    cost: c.req.query("cost") ?? defaults.cost,
+    whatToBring: c.req.query("whatToBring") || defaults.whatToBring,
+    customFields: customFields.some((f) => f.title || f.description) ? customFields : defaults.customFields,
+    participantIds: participantIds.length > 0 ? participantIds : defaults.participantIds,
+  };
 
   return c.html(<ActivityFields values={values} participantsAvailable={await getAvailableParticipants(program)} />);
 });
@@ -469,9 +537,24 @@ admin.get("/programs/:id/activities/fields", async (c) => {
 admin.post("/programs/:id/activities", async (c) => {
   const leader = c.get("leader");
   const program = c.get("program");
-  const parsed = await parseActivityForm(c);
+  const formData = await c.req.formData();
+  const parsed = await parseActivityForm(formData);
 
-  if (!parsed.success) return c.text(parsed.error, 400);
+  if (!parsed.success) {
+    return c.html(
+      <ActivityFormPage
+        leader={leader}
+        program={program}
+        values={rawFormValues(formData, program.periodStart)}
+        dateChips={[]}
+        overlap={{ existing: null, blocked: false }}
+        title="Νέα δράση"
+        participantsAvailable={await getAvailableParticipants(program)}
+        error={parsed.error}
+      />,
+      400,
+    );
+  }
 
   const { data } = parsed;
   const date = parseDateOnly(data.date);
@@ -637,8 +720,24 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
     .limit(1);
   if (!before) return c.notFound();
 
-  const parsed = await parseActivityForm(c);
-  if (!parsed.success) return c.text(parsed.error, 400);
+  const formData = await c.req.formData();
+  const parsed = await parseActivityForm(formData);
+  if (!parsed.success) {
+    return c.html(
+      <ActivityFormPage
+        leader={leader}
+        program={program}
+        values={rawFormValues(formData, before.date)}
+        dateChips={[]}
+        overlap={{ existing: null, blocked: false }}
+        editingActivityId={activityId}
+        title="Επεξεργασία δράσης"
+        participantsAvailable={await getAvailableParticipants(program)}
+        error={parsed.error}
+      />,
+      400,
+    );
+  }
 
   const { data } = parsed;
   const date = parseDateOnly(data.date);

@@ -225,16 +225,18 @@ export function PublicLayout({
           </a>
           <SectionNav active={activeSection} />
           {isLoggedIn ? (
-            <a href="/admin" class="login-trigger">
-              Διαχείριση δράσεων
+            <a href="/admin" class="login-trigger" aria-label="Διαχείριση δράσεων" title="Διαχείριση δράσεων">
+              🛠️
             </a>
           ) : (
             <a
               href={`/auth/login?returnTo=${encodeURIComponent(currentPath)}`}
               class="login-trigger"
+              aria-label="Σύνδεση βαθμοφόρων"
+              title="Σύνδεση βαθμοφόρων"
               onclick="event.preventDefault(); document.getElementById('login-dialog').showModal();"
             >
-              Σύνδεση βαθμοφόρων
+              🔑
             </a>
           )}
         </header>

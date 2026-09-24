@@ -144,7 +144,7 @@ export function ActivityRowEditForm({
       <td>{formatDateNumeric(activity.date)}</td>
       <td>{sectionText}</td>
       <td>{typeText}</td>
-      <td colspan={3}>
+      <td colspan={3} class="quick-edit-cell">
         <form
           class="quick-edit-form"
           hx-post={quickEditUrl(row)}

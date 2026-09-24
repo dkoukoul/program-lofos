@@ -287,9 +287,15 @@ describe("Δημιουργία/επεξεργασία/διαγραφή δράσ�
     const partialRes = await app.request(`/admin/programs/${program.id}/activities`, {
       method: "POST",
       headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
-      body: activityFormBody({ locationLat: "35.3387" }),
+      body: activityFormBody({ locationLat: "35.3387", location: "Πλατεία Ελευθερίας" }),
     });
     expect(partialRes.status).toBe(400);
+    // Ξαναδείχνει τη φόρμα με ό,τι είχε γραφτεί, όχι λευκή σελίδα με raw error text.
+    expect(partialRes.headers.get("content-type")).toContain("text/html");
+    const partialHtml = await partialRes.text();
+    expect(partialHtml).toContain("Νέα δράση");
+    expect(partialHtml).toContain('value="Πλατεία Ελευθερίας"');
+    expect(partialHtml).toContain("Χρειάζονται και οι δύο συντεταγμένες τοποθεσίας");
 
     const outOfRangeRes = await app.request(`/admin/programs/${program.id}/activities`, {
       method: "POST",
@@ -332,6 +338,66 @@ describe("Δημιουργία/επεξεργασία/διαγραφή δράσ�
 
     const [created] = await db.select().from(activities).where(eq(activities.programId, program.id));
     expect(created?.type).toBe("no_activity");
+  });
+
+  test("quick-typical χωρίς διαθέσιμη Κυριακή: redirect με error param που εμφανίζεται σαν μήνυμα στη σελίδα προγράμματος", async () => {
+    const section = await makeSection("omada");
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    // Περίοδος χωρίς καμία Κυριακή μέσα, ώστε nextAvailableSundays να μην επιστρέψει τίποτα.
+    const [program] = await db
+      .insert(programs)
+      .values({
+        sectionId: section.id,
+        periodStart: new Date(2026, 6, 6),
+        periodEnd: new Date(2026, 6, 6),
+        status: "draft",
+        createdAt: new Date(),
+      })
+      .returning();
+    const cookie = await cookieFor(leader);
+
+    const res = await app.request(`/admin/programs/${program!.id}/activities/quick-typical`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe(`/admin/programs/${program!.id}?error=no-available-sunday`);
+
+    const page = await app.request(res.headers.get("location")!, { headers: { cookie } });
+    const html = await page.text();
+    expect(html).toContain("Δεν υπάρχει άλλη διαθέσιμη Κυριακή σε αυτή την περίοδο");
+  });
+
+  test("αλλαγή τύπου δράσης διατηρεί ήδη γραμμένα πεδία, γεμίζει defaults μόνο στα κενά", async () => {
+    const section = await makeSection("koinotita");
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const program = await makeProgram(section.id);
+    const cookie = await cookieFor(leader);
+
+    const params = new URLSearchParams({
+      type: "other",
+      date: "2026-07-05",
+      location: "Πλατεία",
+      locationLat: "",
+      locationLng: "",
+      startTime: "10:00",
+      endTime: "",
+      cost: "",
+      whatToBring: "παγούρι",
+    });
+
+    const res = await app.request(`/admin/programs/${program.id}/activities/fields?${params.toString()}`, {
+      headers: { cookie },
+    });
+    expect(res.status).toBe(200);
+    const html = await res.text();
+
+    // Το ήδη γραμμένο κείμενο δεν σβήνεται από τα defaults του νέου τύπου.
+    expect(html).toContain('value="Πλατεία"');
+    expect(html).toContain('value="10:00"');
+    expect(html).toContain('value="παγούρι"');
+    // Κενό πεδίο (endTime) γεμίζει με ό,τι default έχει ο νέος τύπος (κανένα για "other").
+    expect(html).toContain('value=""');
   });
 });
 

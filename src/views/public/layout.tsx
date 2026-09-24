@@ -1,4 +1,5 @@
-import type { activities, sections } from "../../db/schema";
+import type { activities, sections, SystemNote } from "../../db/schema";
+import type { ActivityCustomField, DetailedActivity } from "../../lib/notes";
 import { LoginForm } from "../admin/login";
 
 type SectionType = typeof sections.$inferSelect.type;
@@ -30,6 +31,39 @@ export const SECTION_LOGOS: Record<SectionType, string> = {
   agele: "/public/images/Logo_cubs.png",
   omada: "/public/images/Logo_scouts.png",
   koinotita: "/public/images/Logo_explorers.png",
+};
+
+export type SectionDocument = {
+  /** Διαδρομή του PDF μέσα στο `public/docs/` (σερβίρεται ως στατικό αρχείο). */
+  href: string;
+  label: string;
+  /** Όνομα αρχείου που βλέπει ο επισκέπτης όταν το κατεβάζει. */
+  downloadName: string;
+  hint: string;
+};
+
+/** Κοινό σε όλα τα τμήματα — απαραίτητο για κάθε συμμετοχή σε δράση (ΣΕΠ). */
+const HEALTH_FORM: SectionDocument = {
+  href: "/public/docs/deltio-ygeias.pdf",
+  label: "Ατομικό Δελτίο Υγείας",
+  downloadName: "Ατομικό Δελτίο Υγείας.pdf",
+  hint: "Συμπληρώνεται από γονέα και ιατρό στην αρχή κάθε προσκοπικής περιόδου.",
+};
+
+function parentsGuide(sectionLabel: string, file: string): SectionDocument {
+  return {
+    href: `/public/docs/${file}`,
+    label: "Ενημερωτικό γονέων",
+    downloadName: `Ενημερωτικό γονέων ${sectionLabel}.pdf`,
+    hint: `Τι είναι και πώς λειτουργεί η ${sectionLabel}, παιδαγωγικοί στόχοι, επικοινωνία με το επιτελείο.`,
+  };
+}
+
+/** Έγγραφα προς λήψη ανά τμήμα (δημόσια σελίδα τμήματος) — πηγή αλήθειας. */
+export const SECTION_DOCUMENTS: Record<SectionType, SectionDocument[]> = {
+  agele: [parentsGuide("Αγέλης", "enimerotiko-goneon-ageli.pdf"), HEALTH_FORM],
+  omada: [parentsGuide("Ομάδας", "enimerotiko-goneon-omada.pdf"), HEALTH_FORM],
+  koinotita: [HEALTH_FORM],
 };
 
 export const ACTIVITY_TYPE_INFO: Record<ActivityRow["type"], { icon: string; label: string }> = {
@@ -111,7 +145,47 @@ export function formatPeriod(periodStart: Date, periodEnd: Date): string {
   return `${formatDateNumeric(periodStart)} – ${formatDateNumeric(periodEnd)}`;
 }
 
-export function ActivityCard({ activity }: { activity: ActivityRow }) {
+/**
+ * Τα δυναμικά πεδία της δράσης (τίτλος + περιγραφή, purpose doc §4) — εμφανίζονται μόνο
+ * όσα έχουν συμπληρωθεί, ποτέ κενό πεδίο (ux-ui-guidelines §3.1).
+ */
+export function ActivityCustomFields({ customFields }: { customFields: ActivityCustomField[] }) {
+  const filled = customFields.filter((field) => field.title !== "" || field.description !== "");
+  if (filled.length === 0) return null;
+
+  return (
+    <dl class="activity-custom-fields">
+      {filled.map((field) => (
+        <>
+          {field.title && <dt>{field.title}</dt>}
+          {field.description && <dd>{field.description}</dd>}
+        </>
+      ))}
+    </dl>
+  );
+}
+
+/**
+ * Σημειώσεις Συστήματος που καλύπτουν την ημέρα της δράσης (purpose doc §5.2) — επιπλέον
+ * πεδίο μέσα στην κάρτα, κοινό σε όλα τα τμήματα, όχι ξεχωριστή δράση. Εικονίδιο + κείμενο
+ * ("Σύστημα"), όχι μόνο χρώμα, ώστε να είναι σαφές και χωρίς αντίληψη χρώματος (§3.1).
+ */
+export function ActivitySystemNotes({ notes }: { notes: SystemNote[] }) {
+  if (notes.length === 0) return null;
+
+  return (
+    <ul class="activity-system-notes">
+      {notes.map((note) => (
+        <li class="activity-system-note">
+          <span class="activity-system-note-label">📣 Σύστημα</span> {note.text}
+          {note.changedAfterPublish && <span class="badge badge-changed">✏️ Άλλαξε η σημείωση</span>}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+export function ActivityCard({ activity }: { activity: DetailedActivity }) {
   const typeInfo = ACTIVITY_TYPE_INFO[activity.type];
   const changedFields = activity.changedAfterPublishFields ?? [];
 
@@ -162,8 +236,41 @@ export function ActivityCard({ activity }: { activity: ActivityRow }) {
           ))}
         {activity.cost && <p class="activity-cost">💶 {activity.cost}</p>}
         {activity.whatToBring && <p class="activity-what-to-bring">🎒 Τι να φέρετε: {activity.whatToBring}</p>}
+        <ActivityCustomFields customFields={activity.customFields} />
+        <ActivitySystemNotes notes={activity.notes} />
       </div>
     </li>
+  );
+}
+
+/**
+ * Χρήσιμα PDF έγγραφα προς λήψη (ενημερωτικό γονέων ανά τμήμα, Ατομικό Δελτίο Υγείας σε όλα).
+ * Δευτερεύον περιεχόμενο: μπαίνει κάτω από το πρόγραμμα, ώστε να μην ανταγωνίζεται τις δράσεις (§3.1).
+ */
+export function SectionDocuments({ type }: { type: SectionType }) {
+  const documents = SECTION_DOCUMENTS[type];
+  if (documents.length === 0) return null;
+
+  return (
+    <section class="section-documents" aria-labelledby="section-documents-heading">
+      <h2 id="section-documents-heading">Χρήσιμα έγγραφα</h2>
+      <ul class="document-list">
+        {documents.map((document) => (
+          <li>
+            <a class="document-link" href={document.href} download={document.downloadName}>
+              <span class="document-icon" aria-hidden="true">
+                📄
+              </span>
+              <span class="document-text">
+                <span class="document-label">{document.label}</span>
+                <span class="document-hint">{document.hint}</span>
+              </span>
+              <span class="document-action">Λήψη PDF ⬇</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -283,7 +390,7 @@ export function SectionSchedulePage({
 }: {
   section: typeof sections.$inferSelect;
   program: { periodStart: Date; periodEnd: Date; themeTitle: string | null } | null;
-  scheduleActivities: ActivityRow[];
+  scheduleActivities: DetailedActivity[];
   variant: SectionVariant;
   loginStatus?: string;
   loginError?: string;
@@ -331,6 +438,8 @@ export function SectionSchedulePage({
           ))}
         </ul>
       )}
+
+      <SectionDocuments type={variant.type} />
     </PublicLayout>
   );
 }

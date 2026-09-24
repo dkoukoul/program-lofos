@@ -1,8 +1,10 @@
-import type { activities, programs, sections } from "../../db/schema";
+import type { programs, sections } from "../../db/schema";
+import type { DetailedActivity } from "../../lib/notes";
 import { selectFeaturedActivity } from "../../lib/schedule";
 import {
   ACTIVITY_TYPE_INFO,
   ActivityCard,
+  ActivitySystemNotes,
   PublicLayout,
   SECTION_LABELS,
   SECTION_LOGOS,
@@ -16,17 +18,16 @@ import {
   googleMapsUrl,
 } from "./layout";
 
-type ActivityRow = typeof activities.$inferSelect;
 type SectionType = typeof sections.$inferSelect.type;
 
 type SectionBlock = {
   section: typeof sections.$inferSelect;
   program: typeof programs.$inferSelect | null;
-  scheduleActivities: ActivityRow[];
+  scheduleActivities: DetailedActivity[];
 };
 
 /** Μπροστινή όψη: η τρέχουσα/επόμενη δράση με έμφαση σε ημέρα/ημερομηνία/ώρα. */
-function FeaturedActivity({ activity }: { activity: ActivityRow }) {
+function FeaturedActivity({ activity }: { activity: DetailedActivity }) {
   const typeInfo = ACTIVITY_TYPE_INFO[activity.type];
   const changedFields = activity.changedAfterPublishFields ?? [];
 
@@ -75,6 +76,7 @@ function FeaturedActivity({ activity }: { activity: ActivityRow }) {
         ) : (
           <p class="card-location">📍 {activity.location}</p>
         ))}
+      <ActivitySystemNotes notes={activity.notes} />
     </div>
   );
 }

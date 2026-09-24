@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import type { Context } from "hono";
 import { z } from "zod";
 import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { db } from "../db/client";
@@ -9,9 +10,11 @@ import {
   leaders,
   programs,
   sections,
+  systemNotes,
   type Activity,
   type Leader,
   type Program,
+  type SystemNote,
 } from "../db/schema";
 import { requireAuth } from "../lib/auth";
 import { requireProgramAccess } from "../lib/authorize";
@@ -22,9 +25,11 @@ import {
   nextAvailableSundays,
   typeDefaults,
 } from "../lib/activities";
-import { sendProgramChangedEmail, sendProgramPublishedEmail } from "../lib/notify";
+import { attachActivityExtras, getProgramNotes } from "../lib/notes";
+import { sendProgramChangedEmail, sendProgramPublishedEmail, sendSystemNoteChangedEmail } from "../lib/notify";
 import { ActivityRow, ActivityRowEditForm, AdminHomePage, rowLabels, type HomeSortColumn, type SortDir } from "../views/admin/home";
 import { HelpPage } from "../views/admin/help";
+import { NOTE_TEXT_MAX, SystemNoteFormPage, noteFormValues } from "../views/admin/notes";
 import { ProgramForm, ProgramsIndexPage } from "../views/admin/programs";
 import {
   ActivityFields,
@@ -406,19 +411,35 @@ const PROGRAM_SCREEN_ERRORS: Record<string, string> = {
   "no-available-sunday": "Δεν υπάρχει άλλη διαθέσιμη Κυριακή σε αυτή την περίοδο — χρησιμοποίησε «+ Νέα δράση».",
 };
 
-admin.get("/programs/:id", async (c) => {
+/**
+ * Η οθόνη προγράμματος, με τα δυναμικά πεδία και τις Σημειώσεις Συστήματος κάθε δράσης
+ * γεμισμένα (`publishedOnly: false` — στο διαχειριστικό φαίνεται και ό,τι είναι ακόμα
+ * πρόχειρο, ώστε ο βαθμοφόρος να βλέπει ό,τι θα δει ο επισκέπτης, ux-ui-guidelines §2.2).
+ */
+async function programScreenResponse(c: Context, error?: string, status?: 400 | 422) {
   const leader = c.get("leader");
   const program = c.get("program");
-  const activitiesList = await db
-    .select()
-    .from(activities)
-    .where(eq(activities.programId, program.id))
-    .orderBy(activities.date);
+  const activitiesList = await attachActivityExtras(
+    await db.select().from(activities).where(eq(activities.programId, program.id)).orderBy(activities.date),
+    { publishedOnly: false },
+  );
+  const notes = program.sectionId === null ? await getProgramNotes(program.id) : [];
 
+  return c.html(
+    <ProgramScreen
+      leader={leader}
+      program={program}
+      activitiesList={activitiesList}
+      notes={notes}
+      error={error}
+    />,
+    status,
+  );
+}
+
+admin.get("/programs/:id", async (c) => {
   const errorParam = c.req.query("error");
-  const error = errorParam ? PROGRAM_SCREEN_ERRORS[errorParam] : undefined;
-
-  return c.html(<ProgramScreen leader={leader} program={program} activitiesList={activitiesList} error={error} />);
+  return programScreenResponse(c, errorParam ? PROGRAM_SCREEN_ERRORS[errorParam] : undefined);
 });
 
 admin.post("/programs/:id/delete", async (c) => {
@@ -432,6 +453,7 @@ admin.post("/programs/:id/delete", async (c) => {
     await db.delete(activityParticipants).where(inArray(activityParticipants.activityId, programActivityIds));
     await db.delete(activities).where(eq(activities.programId, program.id));
   }
+  await db.delete(systemNotes).where(eq(systemNotes.programId, program.id));
   await db.delete(programs).where(eq(programs.id, program.id));
 
   return c.redirect("/admin/programs");
@@ -448,6 +470,154 @@ admin.post("/programs/:id/publish", async (c) => {
     const recipients = await getNotificationRecipients(program.sectionId);
     await sendProgramPublishedEmail(recipients, program);
   }
+  return c.redirect(`/admin/programs/${program.id}`);
+});
+
+// ---- Σημειώσεις Συστήματος ----
+
+/**
+ * Server-side authorization για κάθε write σε Σημείωση Συστήματος (§6 architecture doc):
+ * μόνο το επιτελείο, και μόνο πάνω στο πρόγραμμα Συστήματος (`sectionId = null`) — το
+ * `requireProgramAccess` από μόνο του θα άφηνε το επιτελείο να γράψει σημείωση και σε
+ * πρόγραμμα τμήματος, όπου η έννοια δεν υπάρχει.
+ */
+function denyUnlessSystemNotesAllowed(c: Context): Response | null {
+  const leader = c.get("leader");
+  const program = c.get("program");
+  if (leader.role !== "system_staff" || program.sectionId !== null) {
+    return c.text("Οι Σημειώσεις Συστήματος ορίζονται μόνο από το επιτελείο, στο πρόγραμμα Συστήματος.", 403);
+  }
+  return null;
+}
+
+const systemNoteSchema = z
+  .object({
+    text: z.string().min(1).max(NOTE_TEXT_MAX),
+    dateStart: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    dateEnd: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .refine((v) => parseDateOnly(v.dateStart) <= parseDateOnly(v.dateEnd), {
+    message: "Η ημερομηνία «Έως» δεν μπορεί να είναι πριν από την «Από».",
+  });
+
+const SYSTEM_NOTE_ERROR = "Γράψε κείμενο σημείωσης και έγκυρο εύρος ημερομηνιών (η «Έως» όχι πριν την «Από»).";
+
+function parseSystemNoteForm(formData: FormData) {
+  return systemNoteSchema.safeParse({
+    text: str(formData, "text").slice(0, NOTE_TEXT_MAX),
+    dateStart: str(formData, "dateStart"),
+    dateEnd: str(formData, "dateEnd"),
+  });
+}
+
+async function loadProgramNote(programId: number, noteId: number): Promise<SystemNote | null> {
+  const [note] = await db
+    .select()
+    .from(systemNotes)
+    .where(and(eq(systemNotes.id, noteId), eq(systemNotes.programId, programId)))
+    .limit(1);
+  return note ?? null;
+}
+
+admin.post("/programs/:id/notes", async (c) => {
+  const denied = denyUnlessSystemNotesAllowed(c);
+  if (denied) return denied;
+
+  const program = c.get("program");
+  const parsed = parseSystemNoteForm(await c.req.formData());
+  if (!parsed.success) return programScreenResponse(c, SYSTEM_NOTE_ERROR, 400);
+
+  await db.insert(systemNotes).values({
+    programId: program.id,
+    text: parsed.data.text,
+    dateStart: parseDateOnly(parsed.data.dateStart),
+    dateEnd: parseDateOnly(parsed.data.dateEnd),
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+
+  return c.redirect(`/admin/programs/${program.id}`);
+});
+
+admin.get("/programs/:id/notes/:noteId/edit", async (c) => {
+  const denied = denyUnlessSystemNotesAllowed(c);
+  if (denied) return denied;
+
+  const leader = c.get("leader");
+  const program = c.get("program");
+  const note = await loadProgramNote(program.id, Number(c.req.param("noteId")));
+  if (!note) return c.notFound();
+
+  return c.html(
+    <SystemNoteFormPage leader={leader} program={program} noteId={note.id} values={noteFormValues(note)} />,
+  );
+});
+
+admin.post("/programs/:id/notes/:noteId", async (c) => {
+  const denied = denyUnlessSystemNotesAllowed(c);
+  if (denied) return denied;
+
+  const leader = c.get("leader");
+  const program = c.get("program");
+  const noteId = Number(c.req.param("noteId"));
+  const before = await loadProgramNote(program.id, noteId);
+  if (!before) return c.notFound();
+
+  const formData = await c.req.formData();
+  const parsed = parseSystemNoteForm(formData);
+  if (!parsed.success) {
+    return c.html(
+      <SystemNoteFormPage
+        leader={leader}
+        program={program}
+        noteId={noteId}
+        values={{
+          text: str(formData, "text").slice(0, NOTE_TEXT_MAX),
+          dateStart: str(formData, "dateStart"),
+          dateEnd: str(formData, "dateEnd"),
+        }}
+        error={SYSTEM_NOTE_ERROR}
+      />,
+      400,
+    );
+  }
+
+  const after = {
+    text: parsed.data.text,
+    dateStart: parseDateOnly(parsed.data.dateStart),
+    dateEnd: parseDateOnly(parsed.data.dateEnd),
+  };
+  const changed =
+    after.text !== before.text ||
+    after.dateStart.getTime() !== before.dateStart.getTime() ||
+    after.dateEnd.getTime() !== before.dateEnd.getTime();
+  // Μόλις το πρόγραμμα Συστήματος έχει δημοσιευτεί, κάθε αλλαγή σημειώνεται μόνιμα και
+  // ειδοποιεί (purpose doc §5.4/§5.5) — δεν καθαρίζεται ποτέ αυτόματα.
+  const changedAfterPublish = before.changedAfterPublish || (program.status === "published" && changed);
+
+  await db
+    .update(systemNotes)
+    .set({ ...after, changedAfterPublish, updatedAt: new Date() })
+    .where(eq(systemNotes.id, noteId));
+
+  if (program.status === "published" && changed) {
+    const recipients = await getNotificationRecipients(program.sectionId);
+    await sendSystemNoteChangedEmail(recipients, { ...before, ...after, changedAfterPublish });
+  }
+
+  return c.redirect(`/admin/programs/${program.id}`);
+});
+
+admin.post("/programs/:id/notes/:noteId/delete", async (c) => {
+  const denied = denyUnlessSystemNotesAllowed(c);
+  if (denied) return denied;
+
+  const program = c.get("program");
+  const noteId = Number(c.req.param("noteId"));
+  await db
+    .delete(systemNotes)
+    .where(and(eq(systemNotes.id, noteId), eq(systemNotes.programId, program.id)));
+
   return c.redirect(`/admin/programs/${program.id}`);
 });
 

@@ -79,6 +79,7 @@ program-lofos/
 │   ├── leaders.json           # ποιοι έχουν πρόσβαση + ρόλος/τμήμα (§4α) — εκτός git
 │   └── leaders.example.json   # template, committed
 ├── public/                    # στατικά assets (css, uploaded εικόνες)
+│   └── docs/                  # PDF προς λήψη από τις δημόσιες σελίδες (ενημερωτικά γονέων, δελτίο υγείας)
 ├── data/                      # app.db, uploads/  (εκτός git)
 ├── docs/
 ├── .env.example
@@ -93,7 +94,8 @@ program-lofos/
 - `sessions`: id, leader_id, token_hash, expires_at, created_at, user_agent (για revocation)
 - `programs` (περίοδοι προγράμματος): id, section_id (null αν είναι Σύστημα-wide πρόγραμμα-container — βλ. σημείωση), period_start, period_end, status (`draft`|`published`), theme overrides (χρώμα/εικόνες), theme_title (προαιρετικός τίτλος θέματος περιόδου, π.χ. "Ο Μόγλης" — κυρίως Αγέλη, βλ. §8), published_at
 - `activities` (δράσεις): id, program_id, section_id (ή flag `is_system_wide`), type (`typical`|`day_trip`|`multi_day`|`other`|`no_activity`), location (ελεύθερο κείμενο τοποθεσίας), location_lat/location_lng (real, προαιρετικές συντεταγμένες από τον map picker — null αν δεν έχει επιλεγεί σημείο στον χάρτη, ανεξάρτητα από το αν υπάρχει κείμενο `location`· όταν υπάρχουν, εμφανίζονται δημόσια ως link Google Maps), starts_at, ends_at (ή end_date για `multi_day`), cost, what_to_bring, created/updated timestamps, `changed_after_publish_fields` (json λίστα πεδίων που άλλαξαν μετά τη δημοσίευση, για το UI badge). Για `type = no_activity`: τα πεδία τοποθεσίας/ώρας/κόστους παραμένουν null — η εγγραφή χρησιμεύει μόνο ως marker ότι η ημερομηνία είναι "κατειλημμένη" (καμία δράση).
-- `activity_custom_fields`: id, activity_id, τίτλος, περιγραφή
+- `activity_custom_fields`: id, activity_id, τίτλος, περιγραφή (τα "δυναμικά πεδία" του purpose doc §4 — εμφανίζονται στη δημόσια κάρτα της δράσης και στην περιγραφή του iCal event)
+- `system_notes` (Σημειώσεις Συστήματος, purpose doc §5.2α): id, program_id (πάντα σε πρόγραμμα με `section_id = null`, άρα η σημείωση ακολουθεί το draft→published εκείνου), text (plain text), date_start, date_end (εύρος ημερών, άκρα inclusive), `changed_after_publish` (boolean, για το UI badge — ισοδύναμο του `changed_after_publish_fields` των δράσεων), created/updated timestamps. Δεν συνδέεται με συγκεκριμένη δράση: το ταίριασμα γίνεται κατά το rendering, όποια δράση πέφτει μέσα στο εύρος (`notesForActivity`, `src/lib/notes.ts`) — εξαιρούνται οι δράσεις `type = no_activity`.
 - `activity_participants`: activity_id, leader_id (many-to-many, ποιοι βαθμοφόροι συμμετέχουν)
 
 > Θα οριστικοποιηθεί ως πρώτο migration με το Drizzle schema όταν ξεκινήσουμε την υλοποίηση.
@@ -142,9 +144,10 @@ Rate limiting στο endpoint αίτησης magic link (π.χ. max 5 αιτήμ
 Middleware σε κάθε mutating route ελέγχει:
 - `system_staff` → δικαίωμα σε όλα τα τμήματα και δράσεις Συστήματος.
 - `section_leader` → δικαίωμα **μόνο** σε `program`/`activity` όπου `section_id` == δικό του section.
+- `system_notes` → write **μόνο** από `system_staff` **και μόνο** πάνω σε πρόγραμμα με `section_id = null`. Ο έλεγχος ιδιοκτησίας προγράμματος από μόνος του δεν αρκεί (θα επέτρεπε στο επιτελείο να γράψει σημείωση και σε πρόγραμμα τμήματος, όπου η έννοια δεν υπάρχει) — βλ. `denyUnlessSystemNotesAllowed` στο `src/routes/admin.tsx`.
 - Καμία εξαίρεση client-side μόνο· ο έλεγχος γίνεται πάντα server-side πριν από κάθε write.
 
-**Επικαλυπτόμενες δράσεις ίδιας ημέρας** (business rule, ελέγχεται στο ίδιο write-path): πριν την αποθήκευση μιας νέας δράσης, ο server ελέγχει αν υπάρχει ήδη δράση (ίδιου τμήματος, Δράση Συστήματος, ή `no_activity`) την ίδια ημερομηνία. Η συμπεριφορά ρυθμίζεται από το env var `ALLOW_ACTIVITY_OVERLAP` (boolean, **default: `false`**):
+**Επικαλυπτόμενες δράσεις ίδιας ημέρας** (business rule, ελέγχεται στο ίδιο write-path): πριν την αποθήκευση μιας νέας δράσης, ο server ελέγχει αν υπάρχει ήδη δράση (ίδιου τμήματος, Δράση Συστήματος, ή `no_activity`) την ίδια ημερομηνία. Οι Σημειώσεις Συστήματος **δεν** συμμετέχουν σε αυτόν τον έλεγχο — δεν καταλαμβάνουν ημερομηνία. Η συμπεριφορά ρυθμίζεται από το env var `ALLOW_ACTIVITY_OVERLAP` (boolean, **default: `false`**):
 - `false` (default): το write απορρίπτεται με σαφές μήνυμα λάθους.
 - `true`: επιτρέπεται, αλλά ο client πρέπει να εμφανίσει προειδοποίηση που απαιτεί επιβεβαίωση πριν την αποθήκευση.
 
@@ -155,6 +158,7 @@ Middleware σε κάθε mutating route ελέγχει:
 Triggers (όπως ορίστηκε στο purpose doc):
 - Δημοσίευση νέου προγράμματος → email στους βαθμοφόρους του τμήματος + επιτελείο.
 - Αλλαγή σε ήδη δημοσιευμένο πρόγραμμα → email με ό,τι άλλαξε, στους ίδιους παραλήπτες.
+- Αλλαγή Σημείωσης Συστήματος σε ήδη δημοσιευμένο πρόγραμμα Συστήματος → email στο επιτελείο (ίδιος κανόνας παραληπτών με κάθε ειδοποίηση για πρόγραμμα Συστήματος). Το κείμενο της σημείωσης το γράφει χρήστης, άρα escape-άρεται πριν μπει στο HTML του email (`src/emails/system-note-changed.ts`).
 - Magic link login.
 
 Retry: αν αποτύχει η κλήση στο Resend API, log το σφάλμα· δεν μπλοκάρει τη δημοσίευση (η δημοσίευση πετυχαίνει ούτως ή άλλως, το email είναι best-effort με 1 retry).
@@ -173,6 +177,7 @@ Retry: αν αποτύχει η κλήση στο Resend API, log το σφάλ�
 - Ένα endpoint ανά τμήμα: `/ical/:section_id/:public_token.ics`
 - `public_token`: τυχαίο, μη μαντεύσιμο (UUID v4), αποθηκευμένο στο `sections`, με δυνατότητα rotation από τον admin αν χρειαστεί να ανακληθεί ένα link που έχει διαρρεύσει.
 - Περιλαμβάνει μόνο δράσεις από `published` programs.
+- Η περιγραφή κάθε event περιέχει, πέρα από τύπο/κόστος/τι-να-φέρουν, και τα δυναμικά πεδία της δράσης + τις Σημειώσεις Συστήματος που καλύπτουν την ημέρα της (από δημοσιευμένα προγράμματα Συστήματος).
 - Παράγεται on-the-fly σε κάθε request (χωρίς caching αρχικά — ο όγκος δεδομένων είναι μικρός).
 
 ## 10. Ασφάλεια — checklist

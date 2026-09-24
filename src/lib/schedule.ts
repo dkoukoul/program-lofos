@@ -1,6 +1,7 @@
 import { and, eq, gte, inArray, isNull, lte } from "drizzle-orm";
 import { db } from "../db/client";
 import { activities, programs } from "../db/schema";
+import { attachActivityExtras, type DetailedActivity } from "./notes";
 
 type ProgramRow = typeof programs.$inferSelect;
 type ActivityRow = typeof activities.$inferSelect;
@@ -68,7 +69,7 @@ export function selectFeaturedActivity<T extends Pick<ActivityRow, "date">>(
 
 export type SectionSchedule = {
   program: ProgramRow | null;
-  activities: ActivityRow[];
+  activities: DetailedActivity[];
 };
 
 /** Πρόγραμμα + δράσεις (merged με Δράσεις Συστήματος) προς δημόσια προβολή για ένα τμήμα. */
@@ -105,7 +106,9 @@ export async function getSectionSchedule(sectionId: number, now: Date = new Date
 
   return {
     program: activeProgram,
-    activities: mergeAndSortActivities(sectionActivities, systemActivities),
+    activities: await attachActivityExtras(mergeAndSortActivities(sectionActivities, systemActivities), {
+      publishedOnly: true,
+    }),
   };
 }
 
@@ -115,7 +118,7 @@ export async function getSectionSchedule(sectionId: number, now: Date = new Date
  * Χρησιμοποιείται από το iCal feed (§9 architecture doc), που πρέπει να
  * αντανακλά όλες τις δημοσιευμένες δράσεις, όχι μόνο την τρέχουσα περίοδο.
  */
-export async function getPublishedSectionActivities(sectionId: number): Promise<ActivityRow[]> {
+export async function getPublishedSectionActivities(sectionId: number): Promise<DetailedActivity[]> {
   const sectionPrograms = await db
     .select()
     .from(programs)
@@ -147,5 +150,8 @@ export async function getPublishedSectionActivities(sectionId: number): Promise<
     return mergeAndSortActivities(periodSectionActivities, periodSystemActivities);
   });
 
-  return merged.sort((a, b) => a.date.getTime() - b.date.getTime());
+  return attachActivityExtras(
+    merged.sort((a, b) => a.date.getTime() - b.date.getTime()),
+    { publishedOnly: true },
+  );
 }

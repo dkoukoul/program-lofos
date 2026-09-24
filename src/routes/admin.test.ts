@@ -3,7 +3,7 @@ import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db/client";
-import { activities, leaders, programs, sections, type Leader } from "../db/schema";
+import { activities, leaders, programs, sections, systemNotes, type Leader } from "../db/schema";
 import { createSession } from "../lib/auth";
 import admin from "./admin";
 
@@ -762,5 +762,193 @@ describe("Γρήγορη επεξεργασία (quick-edit) από την αρ�
       headers: { cookie },
     });
     expect(res.status).toBe(403);
+  });
+});
+
+describe("Σημειώσεις Συστήματος", () => {
+  function noteBody(overrides: Record<string, string> = {}): URLSearchParams {
+    const params = new URLSearchParams({
+      text: "Αγιασμός",
+      dateStart: "2026-07-18",
+      dateEnd: "2026-07-18",
+    });
+    for (const [key, value] of Object.entries(overrides)) params.set(key, value);
+    return params;
+  }
+
+  test("create -> edit -> delete round-trip από το επιτελείο", async () => {
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const systemProgram = await makeProgram(null);
+    const cookie = await cookieFor(staff);
+
+    const createRes = await app.request(`/admin/programs/${systemProgram.id}/notes`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: noteBody(),
+    });
+    expect(createRes.status).toBe(302);
+
+    const [created] = await db.select().from(systemNotes).where(eq(systemNotes.programId, systemProgram.id));
+    expect(created?.text).toBe("Αγιασμός");
+    expect(created?.dateStart).toEqual(new Date(2026, 6, 18));
+    expect(created?.changedAfterPublish).toBe(false);
+
+    const editForm = await app.request(`/admin/programs/${systemProgram.id}/notes/${created!.id}/edit`, {
+      headers: { cookie },
+    });
+    expect(editForm.status).toBe(200);
+
+    const editRes = await app.request(`/admin/programs/${systemProgram.id}/notes/${created!.id}`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: noteBody({ text: "Αγιασμός στις 10:00", dateEnd: "2026-07-19" }),
+    });
+    expect(editRes.status).toBe(302);
+
+    const [updated] = await db.select().from(systemNotes).where(eq(systemNotes.id, created!.id));
+    expect(updated?.text).toBe("Αγιασμός στις 10:00");
+    expect(updated?.dateEnd).toEqual(new Date(2026, 6, 19));
+    // Το πρόγραμμα ήταν draft, άρα καμία σήμανση αλλαγής.
+    expect(updated?.changedAfterPublish).toBe(false);
+
+    const deleteRes = await app.request(`/admin/programs/${systemProgram.id}/notes/${created!.id}/delete`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    expect(deleteRes.status).toBe(302);
+    expect((await db.select().from(systemNotes).where(eq(systemNotes.id, created!.id))).length).toBe(0);
+  });
+
+  test("αλλαγή σε δημοσιευμένο πρόγραμμα Συστήματος σημειώνεται μόνιμα", async () => {
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const systemProgram = await makeProgram(null, { status: "published" });
+    const cookie = await cookieFor(staff);
+
+    await app.request(`/admin/programs/${systemProgram.id}/notes`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: noteBody(),
+    });
+    const [created] = await db.select().from(systemNotes).where(eq(systemNotes.programId, systemProgram.id));
+    expect(created?.changedAfterPublish).toBe(false);
+
+    await app.request(`/admin/programs/${systemProgram.id}/notes/${created!.id}`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: noteBody({ text: "Αγιασμός — άλλαξε η ώρα" }),
+    });
+    const [changed] = await db.select().from(systemNotes).where(eq(systemNotes.id, created!.id));
+    expect(changed?.changedAfterPublish).toBe(true);
+
+    // Αποθήκευση χωρίς καμία αλλαγή δεν ξεσημαίνει ό,τι είχε ήδη σημειωθεί.
+    await app.request(`/admin/programs/${systemProgram.id}/notes/${created!.id}`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: noteBody({ text: "Αγιασμός — άλλαξε η ώρα" }),
+    });
+    const [stillChanged] = await db.select().from(systemNotes).where(eq(systemNotes.id, created!.id));
+    expect(stillChanged?.changedAfterPublish).toBe(true);
+  });
+
+  test("το επιτελείο δεν μπορεί να βάλει σημείωση σε πρόγραμμα τμήματος (403)", async () => {
+    const section = await makeSection("agele");
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const sectionProgram = await makeProgram(section.id);
+    const cookie = await cookieFor(staff);
+
+    const res = await app.request(`/admin/programs/${sectionProgram.id}/notes`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: noteBody(),
+    });
+    expect(res.status).toBe(403);
+    expect((await db.select().from(systemNotes).where(eq(systemNotes.programId, sectionProgram.id))).length).toBe(0);
+  });
+
+  test("section_leader μπλοκάρεται στο πρόγραμμα Συστήματος (403)", async () => {
+    const section = await makeSection("omada");
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const systemProgram = await makeProgram(null);
+    const cookie = await cookieFor(leader);
+
+    const res = await app.request(`/admin/programs/${systemProgram.id}/notes`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: noteBody(),
+    });
+    expect(res.status).toBe(403);
+  });
+
+  test("ανάποδο εύρος ημερομηνιών απορρίπτεται (400)", async () => {
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const systemProgram = await makeProgram(null);
+    const cookie = await cookieFor(staff);
+
+    const res = await app.request(`/admin/programs/${systemProgram.id}/notes`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: noteBody({ dateStart: "2026-07-20", dateEnd: "2026-07-18" }),
+    });
+    expect(res.status).toBe(400);
+    expect((await db.select().from(systemNotes).where(eq(systemNotes.programId, systemProgram.id))).length).toBe(0);
+  });
+
+  test("κενό κείμενο απορρίπτεται (400)", async () => {
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const systemProgram = await makeProgram(null);
+    const cookie = await cookieFor(staff);
+
+    const res = await app.request(`/admin/programs/${systemProgram.id}/notes`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: noteBody({ text: "   " }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  test("η διαγραφή προγράμματος Συστήματος παίρνει μαζί και τις σημειώσεις του", async () => {
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const systemProgram = await makeProgram(null);
+    const cookie = await cookieFor(staff);
+
+    await app.request(`/admin/programs/${systemProgram.id}/notes`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: noteBody(),
+    });
+    expect((await db.select().from(systemNotes).where(eq(systemNotes.programId, systemProgram.id))).length).toBe(1);
+
+    const res = await app.request(`/admin/programs/${systemProgram.id}/delete`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    expect(res.status).toBe(302);
+    expect((await db.select().from(systemNotes).where(eq(systemNotes.programId, systemProgram.id))).length).toBe(0);
+  });
+
+  test("η σημείωση φαίνεται μέσα στην κάρτα δράσης τμήματος στο διαχειριστικό", async () => {
+    const section = await makeSection("koinotita");
+    const staff = await makeLeader({ role: "system_staff", sectionId: null });
+    const cookie = await cookieFor(staff);
+
+    const systemProgram = await makeProgram(null);
+    await app.request(`/admin/programs/${systemProgram.id}/notes`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: noteBody({ text: "Αγιασμός στον Άγιο Μηνά" }),
+    });
+
+    const sectionProgram = await makeProgram(section.id);
+    await db.insert(activities).values({
+      programId: sectionProgram.id,
+      type: "typical",
+      date: new Date(2026, 6, 18),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const res = await app.request(`/admin/programs/${sectionProgram.id}`, { headers: { cookie } });
+    expect(res.status).toBe(200);
+    expect(await res.text()).toContain("Αγιασμός στον Άγιο Μηνά");
   });
 });

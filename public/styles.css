@@ -227,6 +227,85 @@ a {
   word-break: break-all;
 }
 
+/* ---- Χρήσιμα έγγραφα προς λήψη (σελίδα τμήματος) ---- */
+
+.section-documents {
+  margin: 2rem 0 0;
+}
+
+.section-documents h2 {
+  font-size: 1.1rem;
+  margin-bottom: 0.75rem;
+}
+
+.document-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.document-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 44px;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--section-accent);
+  border-radius: 0.6rem;
+  background: var(--card-bg);
+  color: inherit;
+  text-decoration: none;
+}
+
+.document-link:hover,
+.document-link:focus-visible {
+  border-color: var(--section-accent);
+}
+
+.document-icon {
+  font-size: 1.5rem;
+  line-height: 1;
+}
+
+.document-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  flex: 1;
+}
+
+.document-label {
+  font-weight: 600;
+}
+
+.document-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.document-action {
+  color: var(--section-accent);
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
+/* Σε κινητό το "Λήψη PDF" πέφτει σε δική του γραμμή αντί να στριμώχνει το κείμενο. */
+@media (max-width: 480px) {
+  .document-link {
+    flex-wrap: wrap;
+    row-gap: 0.35rem;
+  }
+
+  .document-action {
+    flex: 1 0 100%;
+    text-align: right;
+  }
+}
+
 /* ---- Home: κάρτες τμημάτων (3D flip, ratio τραπουλόχαρτου) ---- */
 
 body.home main {
@@ -572,6 +651,139 @@ body.home main::before {
   margin: 0.15rem 0;
 }
 
+/* ---- Δυναμικά πεδία δράσης + Σημειώσεις Συστήματος (κοινά: δημόσια κάρτα & διαχειριστικό) ---- */
+
+.activity-custom-fields {
+  margin: 0.4rem 0 0;
+}
+
+.activity-custom-fields dt {
+  font-weight: 700;
+}
+
+.activity-custom-fields dd {
+  margin: 0 0 0.35rem;
+}
+
+.activity-system-notes {
+  list-style: none;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+/* Η σημείωση ξεχωρίζει ως "από το Σύστημα" με accent border + ετικέτα κειμένου, όχι μόνο χρώμα. */
+.activity-system-note {
+  border-left: 4px solid var(--section-accent, #64748b);
+  border-radius: 0.35rem;
+  background: #f1f5f9;
+  padding: 0.4rem 0.6rem;
+}
+
+.activity-system-note-label {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* ---- Admin: Σημειώσεις Συστήματος (οθόνη προγράμματος Συστήματος) ---- */
+
+.system-notes {
+  margin-top: 2rem;
+  border-top: 1px solid var(--border);
+  padding-top: 1rem;
+}
+
+.system-notes-head {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.system-notes-head h2 {
+  margin: 0;
+}
+
+.system-notes-list {
+  list-style: none;
+  margin: 1rem 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.system-note-card {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.system-note-card > form {
+  display: flex;
+}
+
+.system-note-card > form > .icon-btn {
+  height: 100%;
+}
+
+.system-note-link {
+  flex: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card-bg);
+  text-decoration: none;
+  color: var(--text);
+}
+
+.system-note-text {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.system-note-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  max-width: 34rem;
+}
+
+.system-note-form label {
+  font-weight: 600;
+  margin-top: 0.5rem;
+}
+
+/* `font: inherit` στο textarea: χωρίς αυτό ο browser του δίνει monospace, που ξεχωρίζει από το υπόλοιπο διαχειριστικό. */
+.system-note-form textarea,
+.system-note-form input:not(.date-native) {
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.65rem;
+  font: inherit;
+  font-size: 1rem;
+  border: 1px solid var(--border);
+  border-radius: 0.5rem;
+  box-sizing: border-box;
+}
+
+.system-note-form > button {
+  align-self: flex-start;
+  margin-top: 0.4rem;
+}
+
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 0.4rem;
+}
+
 /* ---- Section theme variants ---- */
 
 body.theme-agele {
@@ -698,6 +910,14 @@ body.admin .site-title {
   font-size: 0.9rem;
 }
 
+/* Σε στενές οθόνες το όνομα του βαθμοφόρου κόβεται σε δύο γράμματα ("Δη…") και δεν προσφέρει τίποτα —
+   το κρύβουμε ώστε ο χώρος να πάει στις ενέργειες (δημόσιο site, βοήθεια, αποσύνδεση). */
+@media (max-width: 640px) {
+  .admin-leader {
+    display: none;
+  }
+}
+
 .admin-logout {
   flex: 0 0 auto;
   display: flex;
@@ -705,9 +925,11 @@ body.admin .site-title {
   margin: 0;
 }
 
-/* Το εικονίδιο βοήθειας και το κουμπί αποσύνδεσης είναι διαφορετικά elements (a.icon-btn μέσα στο
-   header, button.button μέσα σε form) — κλειδώνουμε ίδιο ύψος και ίδιο κάθετο κέντρο ώστε να μην
-   εξαρτάται η ευθυγράμμισή τους από τα metrics του emoji ή τα UA defaults της φόρμας. */
+/* Τα εικονίδια (δημόσιο site, βοήθεια) και το κουμπί αποσύνδεσης είναι διαφορετικά elements
+   (a.icon-btn μέσα στο header, button.button μέσα σε form) — κλειδώνουμε ίδιο ύψος και ίδιο κάθετο
+   κέντρο ώστε να μην εξαρτάται η ευθυγράμμισή τους από τα metrics του emoji ή τα UA defaults της
+   φόρμας. */
+.admin-site-link,
 .admin-help-link,
 .admin-logout .button {
   flex: 0 0 auto;

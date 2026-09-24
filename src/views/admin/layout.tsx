@@ -210,6 +210,16 @@ export function AdminLayout({ title, leader, wide, extraHead, children }: AdminL
             4ο Σύστημα — Διαχειριστικό
           </a>
           <span class="admin-leader">{leader.name}</span>
+          <a
+            class="icon-btn admin-site-link"
+            href="/"
+            target="_blank"
+            rel="noopener"
+            title="Δημόσιο site (νέα καρτέλα)"
+            aria-label="Δημόσιο site — άνοιγμα σε νέα καρτέλα"
+          >
+            🌐
+          </a>
           <a class="icon-btn admin-help-link" href="/admin/help" title="Οδηγός χρήσης" aria-label="Οδηγός χρήσης">
             ❓
           </a>

@@ -102,3 +102,22 @@ export const activityParticipants = sqliteTable(
   },
   (table) => [primaryKey({ columns: [table.activityId, table.leaderId] })],
 );
+
+// Σημείωση Συστήματος: κείμενο που ορίζει το επιτελείο για ένα εύρος ημερομηνιών και
+// εμφανίζεται ως επιπλέον πεδίο σε κάθε δράση κάθε τμήματος μέσα σε αυτό το εύρος —
+// όχι ως ξεχωριστή δράση (purpose doc §2/§5.2). Ανήκει πάντα σε "system πρόγραμμα"
+// (programs.sectionId = null), άρα ακολουθεί το δικό του draft→published.
+export const systemNotes = sqliteTable("system_notes", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  programId: integer("program_id").notNull().references(() => programs.id),
+  text: text("text").notNull(),
+  dateStart: integer("date_start", { mode: "timestamp" }).notNull(),
+  dateEnd: integer("date_end", { mode: "timestamp" }).notNull(),
+  // true = άλλαξε κείμενο/εύρος αφού το πρόγραμμα Συστήματος είχε δημοσιευτεί
+  // (purpose doc §5.4) — δεν καθαρίζεται ποτέ αυτόματα, όπως τα changedAfterPublishFields.
+  changedAfterPublish: integer("changed_after_publish", { mode: "boolean" }).notNull().default(false),
+  createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "timestamp" }).notNull(),
+});
+
+export type SystemNote = typeof systemNotes.$inferSelect;

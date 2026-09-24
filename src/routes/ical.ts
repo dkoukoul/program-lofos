@@ -59,6 +59,13 @@ icalRoutes.get("/:sectionId/:tokenFile", async (c) => {
     if (activity.isSystemWide) descriptionLines.push("Δράση Συστήματος (αφορά όλα τα τμήματα).");
     if (activity.cost) descriptionLines.push(`Κόστος: ${activity.cost}`);
     if (activity.whatToBring) descriptionLines.push(`Τι να φέρετε: ${activity.whatToBring}`);
+    for (const field of activity.customFields) {
+      const line = [field.title, field.description].filter((part) => part !== "").join(": ");
+      if (line) descriptionLines.push(line);
+    }
+    for (const note of activity.notes) {
+      descriptionLines.push(`Σημείωση Συστήματος: ${note.text}`);
+    }
 
     calendar.createEvent({
       id: `activity-${activity.id}@program.lofos.gr`,

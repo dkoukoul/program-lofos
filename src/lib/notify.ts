@@ -1,11 +1,13 @@
 import { Resend } from "resend";
 import { eq } from "drizzle-orm";
 import { db } from "../db/client";
-import { sections, type Activity, type Leader, type Program } from "../db/schema";
+import { sections, type Activity, type Leader, type Program, type SystemNote } from "../db/schema";
 import { magicLinkEmail } from "../emails/magic-link";
 import { programChangedEmail } from "../emails/program-changed";
 import { programPublishedEmail } from "../emails/program-published";
+import { systemNoteChangedEmail } from "../emails/system-note-changed";
 import { CHANGED_FIELD_LABELS, SECTION_LABELS, formatActivityDate, formatPeriod } from "../views/public/layout";
+import { formatNoteRange } from "./notes";
 
 const FROM_ADDRESS = "program.lofos.gr <no-reply@program.lofos.gr>";
 
@@ -97,5 +99,27 @@ export async function sendProgramChangedEmail(
     subject,
     html,
     devLogLabel: `Αλλαγή δράσης στο πρόγραμμα ${label}`,
+  });
+}
+
+/**
+ * Ειδοποίηση αλλαγής Σημείωσης Συστήματος σε ήδη δημοσιευμένο πρόγραμμα Συστήματος
+ * (purpose doc §5.4/§5.5). Παραλήπτες: το επιτελείο — ίδιος κανόνας με κάθε άλλη
+ * ειδοποίηση για πρόγραμμα Συστήματος (`getNotificationRecipients(null)`).
+ */
+export async function sendSystemNoteChangedEmail(recipients: Leader[], note: SystemNote): Promise<void> {
+  if (recipients.length === 0) return;
+
+  const { subject, html } = systemNoteChangedEmail({
+    range: formatNoteRange(note),
+    text: note.text,
+    url: `${process.env.BASE_URL ?? ""}/`,
+  });
+
+  await sendEmail({
+    to: recipients.map((r) => r.email),
+    subject,
+    html,
+    devLogLabel: "Αλλαγή Σημείωσης Συστήματος",
   });
 }

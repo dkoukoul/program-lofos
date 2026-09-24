@@ -1,6 +1,9 @@
-import type { Activity, Leader, Program } from "../../../db/schema";
+import type { Leader, Program, SystemNote } from "../../../db/schema";
+import type { DetailedActivity } from "../../../lib/notes";
 import {
   ACTIVITY_TYPE_INFO,
+  ActivityCustomFields,
+  ActivitySystemNotes,
   changedFieldLabels,
   formatActivityDate,
   formatActivityTime,
@@ -9,13 +12,14 @@ import {
 } from "../../public/layout";
 import { AdminLayout } from "../layout";
 import { InfoTip } from "../info-tip";
+import { SystemNotesPanel } from "../notes";
 
 const STATUS_LABELS: Record<Program["status"], string> = {
   draft: "Πρόχειρο",
   published: "Δημοσιευμένο",
 };
 
-function AdminActivityCard({ activity }: { activity: Activity }) {
+function AdminActivityCard({ activity }: { activity: DetailedActivity }) {
   const typeInfo = ACTIVITY_TYPE_INFO[activity.type];
   const changedFields = activity.changedAfterPublishFields ?? [];
   const editUrl = `/admin/programs/${activity.programId}/activities/${activity.id}/edit`;
@@ -56,6 +60,9 @@ function AdminActivityCard({ activity }: { activity: Activity }) {
         ) : (
           <p class="activity-location">📍 {activity.location}</p>
         ))}
+      {/* Ό,τι θα δει ο επισκέπτης, το βλέπει και ο βαθμοφόρος (ux-ui-guidelines §2.2). */}
+      <ActivityCustomFields customFields={activity.customFields} />
+      <ActivitySystemNotes notes={activity.notes} />
       <form method="post" action={`/admin/programs/${activity.programId}/activities/${activity.id}/delete`}>
         <button
           type="submit"
@@ -75,11 +82,14 @@ export function ProgramScreen({
   leader,
   program,
   activitiesList,
+  notes,
   error,
 }: {
   leader: Leader;
   program: Program;
-  activitiesList: Activity[];
+  activitiesList: DetailedActivity[];
+  /** Οι Σημειώσεις Συστήματος του προγράμματος — μόνο για το πρόγραμμα Συστήματος. */
+  notes: SystemNote[];
   error?: string;
 }) {
   const label = program.sectionId === null ? "Σύστημα" : undefined;
@@ -134,6 +144,8 @@ export function ProgramScreen({
           ))}
         </ul>
       )}
+
+      {program.sectionId === null && <SystemNotesPanel program={program} notes={notes} />}
     </AdminLayout>
   );
 }

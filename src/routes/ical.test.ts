@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { Hono } from "hono";
 import { db } from "../db/client";
-import { activities, programs, sections } from "../db/schema";
+import { activities, activityCustomFields, programs, sections, systemNotes } from "../db/schema";
 import ical from "./ical";
 
 beforeAll(() => {
@@ -112,5 +112,61 @@ describe("GET /ical/:sectionId/:tokenFile", () => {
     expect(body).toContain(`UID:activity-${noActivity!.id}@program.lofos.gr`);
     expect(body).not.toContain(`UID:activity-${draftActivity!.id}@program.lofos.gr`);
     expect(body).toContain("SUMMARY:Τυπική συγκέντρωση — Λόφος");
+  });
+
+  test("βάζει τα δυναμικά πεδία και τις Σημειώσεις Συστήματος στην περιγραφή του event", async () => {
+    const agele = await section("agele");
+
+    const [program] = await db
+      .insert(programs)
+      .values({
+        sectionId: agele.id,
+        periodStart: new Date(2097, 0, 1),
+        periodEnd: new Date(2097, 0, 31),
+        status: "published",
+        createdAt: new Date(),
+      })
+      .returning();
+
+    const [activity] = await db
+      .insert(activities)
+      .values({
+        programId: program!.id,
+        type: "typical",
+        date: new Date(2097, 0, 18),
+        startsAt: new Date(2097, 0, 18, 11, 0),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .returning();
+    await db
+      .insert(activityCustomFields)
+      .values({ activityId: activity!.id, title: "Στολή", description: "Πλήρης προσκοπική" });
+
+    const [systemProgram] = await db
+      .insert(programs)
+      .values({
+        sectionId: null,
+        periodStart: new Date(2097, 0, 1),
+        periodEnd: new Date(2097, 0, 31),
+        status: "published",
+        createdAt: new Date(),
+      })
+      .returning();
+    await db.insert(systemNotes).values({
+      programId: systemProgram!.id,
+      text: "Αγιασμός",
+      dateStart: new Date(2097, 0, 18),
+      dateEnd: new Date(2097, 0, 18),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const res = await app.request(`/ical/${agele.id}/${agele.icalPublicToken}.ics`);
+    const body = await res.text();
+    // Το ical-generator αναδιπλώνει γραμμές >75 octets, άρα ελέγχουμε χωρίς τα line breaks.
+    const unfolded = body.replaceAll("\r\n ", "");
+    expect(unfolded).toContain("Στολή: Πλήρης προσκοπική");
+    expect(unfolded).toContain("Σημείωση Συστήματος: Αγιασμός");
   });
 });

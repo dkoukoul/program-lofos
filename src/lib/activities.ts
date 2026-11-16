@@ -12,14 +12,26 @@ export type ActivityTypeDefaults = {
   whatToBring?: string;
 };
 
-/** Defaults ανά τύπο δράσης (purpose doc §4). */
-export function typeDefaults(type: ActivityType): ActivityTypeDefaults {
+type SectionType = "agele" | "omada" | "koinotita";
+
+/**
+ * Defaults ανά τύπο δράσης (purpose doc §4). Στην Κοινότητα το "τι να κρατάνε" μένει κενό —
+ * `sectionType` null/undefined = πρόγραμμα Συστήματος (ίδια defaults με Αγέλη/Ομάδα).
+ */
+export function typeDefaults(type: ActivityType, sectionType?: SectionType | null): ActivityTypeDefaults {
   switch (type) {
     case "typical":
-      return { location: "Λόφος", startTime: "11:00", endTime: "13:00", whatToBring: "παγούρι" };
+      return sectionType === "koinotita"
+        ? { location: "Λόφος", startTime: "11:00", endTime: "13:00" }
+        : { location: "Λόφος", startTime: "11:00", endTime: "13:00", whatToBring: "παγούρι" };
     default:
       return {};
   }
+}
+
+/** "Πλήρης προσκοπική στολή" σε νέα δράση: τσεκαρισμένο παντού εκτός από την Κοινότητα (purpose doc §4). */
+export function defaultFullUniform(sectionType?: SectionType | null): boolean {
+  return sectionType !== "koinotita";
 }
 
 /**

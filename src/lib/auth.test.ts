@@ -4,7 +4,18 @@ import { eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { db } from "../db/client";
 import { leaders, magicLinks, sessions } from "../db/schema";
-import { createMagicLink, createSession, checkRateLimit, hashToken, requireAuth, verifyMagicLink } from "./auth";
+import {
+  PASSWORD_MAX_LENGTH,
+  checkRateLimit,
+  createMagicLink,
+  createSession,
+  destroyOtherSessions,
+  hashToken,
+  requireAuth,
+  setLeaderPassword,
+  verifyMagicLink,
+  verifyPasswordLogin,
+} from "./auth";
 
 beforeAll(() => {
   migrate(db, { migrationsFolder: "./src/db/migrations" });
@@ -93,5 +104,90 @@ describe("rate limiter", () => {
       expect(checkRateLimit(key)).toBe(true);
     }
     expect(checkRateLimit(key)).toBe(false);
+  });
+});
+
+describe("κωδικός (password login)", () => {
+  const PASSWORD = "σωστός-κωδικός-123";
+
+  test("setLeaderPassword αποθηκεύει argon2id hash, ποτέ plaintext", async () => {
+    const leader = await makeLeader(`pw-hash-${crypto.randomUUID()}@example.com`);
+    await setLeaderPassword(leader.id, PASSWORD);
+    const [row] = await db.select().from(leaders).where(eq(leaders.id, leader.id));
+    expect(row?.passwordHash).toStartWith("$argon2id$");
+    expect(row?.passwordHash).not.toContain(PASSWORD);
+  });
+
+  test("verifyPasswordLogin επιστρέφει τον βαθμοφόρο με σωστό email+κωδικό", async () => {
+    const email = `pw-ok-${crypto.randomUUID()}@example.com`;
+    const leader = await makeLeader(email);
+    await setLeaderPassword(leader.id, PASSWORD);
+    expect((await verifyPasswordLogin(email, PASSWORD))?.id).toBe(leader.id);
+  });
+
+  test("verifyPasswordLogin απορρίπτει λάθος κωδικό", async () => {
+    const email = `pw-wrong-${crypto.randomUUID()}@example.com`;
+    const leader = await makeLeader(email);
+    await setLeaderPassword(leader.id, PASSWORD);
+    expect(await verifyPasswordLogin(email, "λάθος-κωδικός-123")).toBeNull();
+  });
+
+  test("verifyPasswordLogin απορρίπτει βαθμοφόρο χωρίς κωδικό (μόνο magic link)", async () => {
+    const email = `pw-none-${crypto.randomUUID()}@example.com`;
+    await makeLeader(email);
+    expect(await verifyPasswordLogin(email, PASSWORD)).toBeNull();
+  });
+
+  test("verifyPasswordLogin απορρίπτει άγνωστο email", async () => {
+    expect(await verifyPasswordLogin(`nobody-${crypto.randomUUID()}@example.com`, PASSWORD)).toBeNull();
+  });
+
+  test("verifyPasswordLogin απορρίπτει απενεργοποιημένο βαθμοφόρο ακόμα και με σωστό κωδικό", async () => {
+    const email = `pw-inactive-${crypto.randomUUID()}@example.com`;
+    const leader = await makeLeader(email);
+    await setLeaderPassword(leader.id, PASSWORD);
+    await db.update(leaders).set({ active: false }).where(eq(leaders.id, leader.id));
+    expect(await verifyPasswordLogin(email, PASSWORD)).toBeNull();
+  });
+
+  test("verifyPasswordLogin απορρίπτει κενό ή υπερβολικά μεγάλο κωδικό", async () => {
+    const email = `pw-len-${crypto.randomUUID()}@example.com`;
+    const leader = await makeLeader(email);
+    await setLeaderPassword(leader.id, PASSWORD);
+    expect(await verifyPasswordLogin(email, "")).toBeNull();
+    expect(await verifyPasswordLogin(email, "x".repeat(PASSWORD_MAX_LENGTH + 1))).toBeNull();
+  });
+
+  test("createSession καταγράφει τον τρόπο σύνδεσης (default magic_link)", async () => {
+    const leader = await makeLeader(`pw-method-${crypto.randomUUID()}@example.com`);
+    const linkToken = await createSession(leader.id, null);
+    const pwToken = await createSession(leader.id, null, "password");
+    const [linkRow] = await db.select().from(sessions).where(eq(sessions.tokenHash, hashToken(linkToken)));
+    const [pwRow] = await db.select().from(sessions).where(eq(sessions.tokenHash, hashToken(pwToken)));
+    expect(linkRow?.authMethod).toBe("magic_link");
+    expect(pwRow?.authMethod).toBe("password");
+  });
+
+  test("destroyOtherSessions κρατά μόνο το τρέχον session του βαθμοφόρου", async () => {
+    const leader = await makeLeader(`pw-others-${crypto.randomUUID()}@example.com`);
+    const other = await makeLeader(`pw-others-b-${crypto.randomUUID()}@example.com`);
+    const current = await createSession(leader.id, null);
+    await createSession(leader.id, null);
+    await createSession(leader.id, null);
+    await createSession(other.id, null);
+
+    await destroyOtherSessions(leader.id, current);
+
+    const remaining = await db.select().from(sessions).where(eq(sessions.leaderId, leader.id));
+    expect(remaining.map((row) => row.tokenHash)).toEqual([hashToken(current)]);
+    const othersRemaining = await db.select().from(sessions).where(eq(sessions.leaderId, other.id));
+    expect(othersRemaining.length).toBe(1);
+  });
+
+  test("checkRateLimit δέχεται δικά του όρια ανά key", () => {
+    const key = `password:${crypto.randomUUID()}`;
+    expect(checkRateLimit(key, { max: 2, windowMs: 60_000 })).toBe(true);
+    expect(checkRateLimit(key, { max: 2, windowMs: 60_000 })).toBe(true);
+    expect(checkRateLimit(key, { max: 2, windowMs: 60_000 })).toBe(false);
   });
 });

@@ -231,6 +231,14 @@ export function AdminLayout({ title, leader, wide, nav, extraHead, children }: A
           >
             🌐
           </a>
+          <a
+            class="icon-btn admin-account-link"
+            href="/admin/account"
+            title="Ο λογαριασμός μου (κωδικός σύνδεσης)"
+            aria-label="Ο λογαριασμός μου — κωδικός σύνδεσης"
+          >
+            👤
+          </a>
           <a class="icon-btn admin-help-link" href="/admin/help" title="Οδηγός χρήσης" aria-label="Οδηγός χρήσης">
             ❓
           </a>

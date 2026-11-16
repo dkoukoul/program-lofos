@@ -909,6 +909,25 @@ dialog#login-dialog::backdrop {
   cursor: pointer;
 }
 
+.login-form label {
+  display: block;
+  margin-top: 0.75rem;
+}
+
+.login-form .login-hint {
+  font-size: 0.85rem;
+  color: var(--muted, #555);
+  margin: 0.25rem 0 0;
+}
+
+/* Δευτερεύον κουμπί "Αποστολή συνδέσμου": ίδιο μέγεθος, outline αντί για γέμισμα. */
+.login-form button.login-link-button,
+body.theme-agele .login-form button.login-link-button {
+  background: transparent;
+  color: inherit;
+  border: 1px solid var(--section-accent);
+}
+
 .login-form .error {
   color: var(--danger);
 }
@@ -974,6 +993,7 @@ body.admin .site-title {
    κέντρο ώστε να μην εξαρτάται η ευθυγράμμισή τους από τα metrics του emoji ή τα UA defaults της
    φόρμας. */
 .admin-site-link,
+.admin-account-link,
 .admin-help-link,
 .admin-logout .button {
   flex: 0 0 auto;
@@ -1022,7 +1042,8 @@ form.program-form {
 }
 
 .activity-form label,
-.program-form label {
+.program-form label,
+.account-form label {
   font-weight: 600;
   margin-top: 0.5rem;
 }
@@ -1031,7 +1052,8 @@ form.program-form {
 .activity-form textarea,
 .activity-form select,
 .program-form input:not(.date-native),
-.program-form select {
+.program-form select,
+.account-form input {
   width: 100%;
   min-height: 44px;
   padding: 0.5rem 0.65rem;
@@ -1043,6 +1065,29 @@ form.program-form {
 
 .activity-form textarea {
   min-height: 5rem;
+}
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  max-width: 24rem;
+}
+
+.account-form .hint {
+  margin: 0;
+}
+
+.account-form button {
+  margin-top: 0.5rem;
+  align-self: flex-start;
+}
+
+.account-section .success {
+  color: #166534;
+  background: #dcfce7;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
 }
 
 /*

@@ -6,7 +6,7 @@ import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { eq } from "drizzle-orm";
 import { db } from "./client";
 import { leaders, magicLinks, sections, sessions } from "./schema";
-import { createMagicLink, createSession } from "../lib/auth";
+import { createMagicLink, createSession, setLeaderPassword } from "../lib/auth";
 import { syncLeadersFromConfig } from "./syncLeaders";
 
 beforeAll(async () => {
@@ -123,6 +123,7 @@ describe("syncLeadersFromConfig", () => {
     const leader = await leaderByEmail(email);
     await createSession(leader!.id, null);
     await createMagicLink(leader!.id);
+    await setLeaderPassword(leader!.id, "a-long-password-123");
 
     const remainingEntries = await otherActiveLeaderEntries(leader!.id);
     const result = await syncLeadersFromConfig(writeConfig({ leaders: remainingEntries }));
@@ -130,6 +131,7 @@ describe("syncLeadersFromConfig", () => {
     expect(result.deactivated).toBe(1);
     const updated = await leaderByEmail(email);
     expect(updated?.active).toBe(false);
+    expect(updated?.passwordHash).toBeNull();
 
     const remainingSessions = await db.select().from(sessions).where(eq(sessions.leaderId, leader!.id));
     const remainingMagicLinks = await db.select().from(magicLinks).where(eq(magicLinks.leaderId, leader!.id));

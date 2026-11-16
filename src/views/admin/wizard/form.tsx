@@ -1,6 +1,6 @@
 import type { Activity, Leader, Program } from "../../../db/schema";
 import { ACTIVITY_TYPE_INFO, formatDateNumeric, googleMapsUrl } from "../../public/layout";
-import { isTimeTbd, typeDefaults, type ActivityTypeDefaults } from "../../../lib/activities";
+import { defaultFullUniform, isTimeTbd, typeDefaults, type ActivityTypeDefaults } from "../../../lib/activities";
 import { AdminLayout } from "../layout";
 import { InfoTip } from "../info-tip";
 import { DateInput } from "../date-input";
@@ -111,7 +111,7 @@ export type ActivityFormValues = {
   startTime: string;
   endTime: string;
   cost: string;
-  /** "Πλήρης προσκοπική στολή" — προεπιλεγμένο σε κάθε νέα δράση. */
+  /** "Πλήρης προσκοπική στολή" — προεπιλεγμένο σε κάθε νέα δράση (εκτός Κοινότητας). */
   fullUniform: boolean;
   whatToBring: string;
   customFields: CustomFieldValue[];
@@ -120,8 +120,12 @@ export type ActivityFormValues = {
 
 const EMPTY_CUSTOM_FIELDS: CustomFieldValue[] = [{ title: "", description: "" }, { title: "", description: "" }, { title: "", description: "" }];
 
-export function defaultFormValues(type: ActivityType, date: Date): ActivityFormValues {
-  const defaults: ActivityTypeDefaults = typeDefaults(type);
+export function defaultFormValues(
+  type: ActivityType,
+  date: Date,
+  sectionType?: Parameters<typeof typeDefaults>[1],
+): ActivityFormValues {
+  const defaults: ActivityTypeDefaults = typeDefaults(type, sectionType);
   return {
     date,
     type,
@@ -132,7 +136,7 @@ export function defaultFormValues(type: ActivityType, date: Date): ActivityFormV
     startTime: defaults.startTime ?? "",
     endTime: defaults.endTime ?? "",
     cost: "",
-    fullUniform: true,
+    fullUniform: defaultFullUniform(sectionType),
     whatToBring: defaults.whatToBring ?? "",
     customFields: EMPTY_CUSTOM_FIELDS,
     participantIds: [],
@@ -240,7 +244,7 @@ function ActivityFields({
             <input type="checkbox" name="fullUniform" checked={values.fullUniform} />
             Πλήρης προσκοπική στολή
           </label>
-          <InfoTip text="Προεπιλεγμένο σε κάθε νέα δράση. Όταν είναι τσεκαρισμένο, στη δημόσια σελίδα εμφανίζεται «Πλήρης προσκοπική στολή» πάνω από το «Τι να φέρετε». Ξε-τσέκαρέ το αν τα παιδιά δεν χρειάζεται να έρθουν με στολή." />
+          <InfoTip text="Προεπιλεγμένο σε κάθε νέα δράση (εκτός Κοινότητας). Όταν είναι τσεκαρισμένο, στη δημόσια σελίδα εμφανίζεται «Πλήρης προσκοπική στολή» πάνω από το «Τι να φέρετε». Ξε-τσέκαρέ το αν τα παιδιά δεν χρειάζεται να έρθουν με στολή." />
         </div>
       </section>
 

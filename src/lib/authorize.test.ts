@@ -10,6 +10,7 @@ function makeLeader(overrides: Partial<Leader>): Leader {
     role: "section_leader",
     sectionId: null,
     active: true,
+    passwordHash: null,
     createdAt: new Date(),
     ...overrides,
   };

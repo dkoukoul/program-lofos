@@ -16,7 +16,15 @@ import {
   type Program,
   type SystemNote,
 } from "../db/schema";
-import { requireAuth } from "../lib/auth";
+import {
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+  destroyOtherSessions,
+  getSessionCookie,
+  requireAuth,
+  setLeaderPassword,
+  verifyLeaderPassword,
+} from "../lib/auth";
 import { canEditSection, requireProgramAccess, requireSystemStaff } from "../lib/authorize";
 import {
   applyTimeTbd,
@@ -27,6 +35,7 @@ import {
   newlyChangedFields,
   nextAvailableSundays,
   typeDefaults,
+  defaultFullUniform,
   unhideReChangedGroups,
 } from "../lib/activities";
 import { logActivityChange } from "../lib/audit";
@@ -49,6 +58,7 @@ import { AgeleSectionPage } from "../views/public/templates/agele";
 import { KoinotitaSectionPage } from "../views/public/templates/koinotita";
 import { OmadaSectionPage } from "../views/public/templates/omada";
 import { ActivityChangeBadges } from "../views/admin/change-badges";
+import { AccountPage, requiresCurrentPassword } from "../views/admin/account";
 import { HelpPage } from "../views/admin/help";
 import { NOTE_TEXT_MAX, SystemNoteFormPage, noteFormValues } from "../views/admin/notes";
 import { ProgramForm, ProgramsIndexPage, type ProgramGroup } from "../views/admin/programs";
@@ -216,6 +226,13 @@ async function getNotificationRecipients(sectionId: number | null): Promise<Lead
 async function getSectionsById(): Promise<Map<number, typeof sections.$inferSelect>> {
   const all = await db.select().from(sections);
   return new Map(all.map((s) => [s.id, s]));
+}
+
+/** Τύπος τμήματος του προγράμματος (null = πρόγραμμα Συστήματος) — για τα defaults νέας δράσης. */
+async function programSectionType(program: Program): Promise<SectionType | null> {
+  if (program.sectionId === null) return null;
+  const [section] = await db.select().from(sections).where(eq(sections.id, program.sectionId)).limit(1);
+  return section?.type ?? null;
 }
 
 async function loadOwnActivity(program: Program, activityId: number): Promise<Activity | null> {
@@ -468,6 +485,55 @@ admin.get("/activities", async (c) => {
 admin.get("/help", async (c) => {
   const leader = c.get("leader");
   return c.html(<HelpPage leader={leader} />);
+});
+
+admin.get("/account", (c) => {
+  return c.html(
+    <AccountPage leader={c.get("leader")} authMethod={c.get("authMethod")} saved={c.req.query("saved") === "1"} />,
+  );
+});
+
+const setPasswordSchema = z
+  .object({
+    currentPassword: z.string(),
+    newPassword: z
+      .string()
+      .min(PASSWORD_MIN_LENGTH, `Ο κωδικός πρέπει να έχει τουλάχιστον ${PASSWORD_MIN_LENGTH} χαρακτήρες.`)
+      .max(PASSWORD_MAX_LENGTH, `Ο κωδικός μπορεί να έχει έως ${PASSWORD_MAX_LENGTH} χαρακτήρες.`),
+    confirmPassword: z.string(),
+  })
+  .refine((v) => v.newPassword === v.confirmPassword, { message: "Οι δύο κωδικοί δεν ταιριάζουν." });
+
+/**
+ * Ορισμός/αλλαγή κωδικού — μόνο για τον ίδιο τον συνδεδεμένο βαθμοφόρο (κανένα leaderId από το request).
+ * Ένα password session πρέπει να δώσει τον τρέχοντα κωδικό· ένα magic-link session όχι (έχει ήδη
+ * αποδείξει κατοχή του email — έτσι λειτουργεί και το "ξέχασα τον κωδικό"). Μετά την αλλαγή
+ * ανακαλούνται όλα τα άλλα sessions του χρήστη.
+ */
+admin.post("/account/password", async (c) => {
+  const leader = c.get("leader");
+  const authMethod = c.get("authMethod");
+  const formData = await c.req.formData();
+  const fail = (error: string) => c.html(<AccountPage leader={leader} authMethod={authMethod} error={error} />, 400);
+
+  const parsed = setPasswordSchema.safeParse({
+    // Χωρίς trim: τα κενά είναι έγκυροι χαρακτήρες κωδικού.
+    currentPassword: formData.get("currentPassword") ?? "",
+    newPassword: formData.get("newPassword") ?? "",
+    confirmPassword: formData.get("confirmPassword") ?? "",
+  });
+  if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Μη έγκυρος κωδικός.");
+
+  if (requiresCurrentPassword(leader, authMethod)) {
+    if (!(await verifyLeaderPassword(leader, parsed.data.currentPassword))) {
+      return fail("Ο τρέχων κωδικός δεν είναι σωστός.");
+    }
+  }
+
+  await setLeaderPassword(leader.id, parsed.data.newPassword);
+  const rawToken = getSessionCookie(c);
+  if (rawToken) await destroyOtherSessions(leader.id, rawToken);
+  return c.redirect("/admin/account?saved=1");
 });
 
 const PREVIEW_PAGES = {
@@ -937,7 +1003,7 @@ admin.get("/programs/:id/activities/new", async (c) => {
   // ?date=: ήρθαμε από το "Άλλη…" μιας κενής Κυριακής — προεπιλέγουμε εκείνη τη μέρα (αν είναι στην περίοδο).
   const requested = parseDateParam(c.req.query("date"));
   const date = requested && isWithinPeriod(program, requested) ? requested : (chips[0] ?? program.periodStart);
-  const values = defaultFormValues("typical", date);
+  const values = defaultFormValues("typical", date, await programSectionType(program));
   const existing = findOverlap(candidates, date);
 
   return c.html(
@@ -977,7 +1043,7 @@ admin.get("/programs/:id/activities/fields", async (c) => {
   const type = c.req.query("type") as Activity["type"] | undefined;
   const dateParam = c.req.query("date");
   const date = dateParam && /^\d{4}-\d{2}-\d{2}$/.test(dateParam) ? parseDateOnly(dateParam) : program.periodStart;
-  const defaults = defaultFormValues(type ?? "typical", date);
+  const defaults = defaultFormValues(type ?? "typical", date, await programSectionType(program));
 
   // Το <select> τύπου στέλνει όλη τη φόρμα (hx-include="closest form") ώστε ό,τι έχει ήδη
   // γραφτεί χειροκίνητα να μη σβήνεται — τα defaults του νέου τύπου γεμίζουν μόνο τα κενά πεδία.
@@ -1112,7 +1178,8 @@ admin.post("/programs/:id/activities/quick-typical", async (c) => {
   if ("error" in target) return c.redirect(`/admin/programs/${program.id}?error=${target.error}`);
   const { date, fromSlot } = target;
 
-  const defaults = typeDefaults("typical");
+  const sectionType = await programSectionType(program);
+  const defaults = typeDefaults("typical", sectionType);
   const [activity] = await db
     .insert(activities)
     .values({
@@ -1123,7 +1190,7 @@ admin.post("/programs/:id/activities/quick-typical", async (c) => {
       location: defaults.location ?? null,
       startsAt: defaults.startTime ? combineDateTime(toDateInputValue(date), defaults.startTime) : null,
       endsAt: defaults.endTime ? combineDateTime(toDateInputValue(date), defaults.endTime) : null,
-      fullUniform: true,
+      fullUniform: defaultFullUniform(sectionType),
       whatToBring: defaults.whatToBring ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),

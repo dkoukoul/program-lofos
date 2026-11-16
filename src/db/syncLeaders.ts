@@ -32,7 +32,7 @@ function loadConfig(path: string) {
  * Συγχρονίζει τους επιτρεπόμενους χρήστες από το JSON config (§6 architecture doc)
  * στο `leaders` table: το config είναι η πηγή αλήθειας για ΠΟΙΟΙ έχουν πρόσβαση.
  * Αφαίρεση ενός leader από το config τον απενεργοποιεί (`active = false`) και
- * ανακαλεί αμέσως τις υπάρχουσες sessions/magic links του — η εγγραφή δεν διαγράφεται
+ * ανακαλεί αμέσως τις υπάρχουσες sessions/magic links και τον κωδικό του — η εγγραφή δεν διαγράφεται
  * γιατί άλλοι πίνακες (sessions, magic_links, activity_participants) την αναφέρουν με FK.
  */
 export async function syncLeadersFromConfig(
@@ -74,7 +74,9 @@ export async function syncLeadersFromConfig(
   const toDeactivate = activeLeaders.filter((leader) => !configEmails.has(leader.email));
 
   for (const leader of toDeactivate) {
-    await db.update(leaders).set({ active: false }).where(eq(leaders.id, leader.id));
+    // Ο κωδικός μηδενίζεται κι αυτός: αν το email ξαναμπεί αργότερα στο config, ο χρήστης
+    // ξεκινά από magic link — δεν "ξυπνάει" ένας παλιός κωδικός.
+    await db.update(leaders).set({ active: false, passwordHash: null }).where(eq(leaders.id, leader.id));
     await db.delete(sessions).where(eq(sessions.leaderId, leader.id));
     await db.delete(magicLinks).where(eq(magicLinks.leaderId, leader.id));
   }

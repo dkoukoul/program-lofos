@@ -41,7 +41,7 @@
 | Βάση δεδομένων | **SQLite** αρχείο, μέσω `bun:sqlite` (native driver) | Όπως ζητήθηκε. Μηδενικό διαχειριστικό βάρος, ένα αρχείο, εύκολο backup. |
 | ORM / query layer | **Drizzle ORM** (drizzle-orm + drizzle-kit) πάνω από bun:sqlite | Type-safe queries, schema-as-code, αυτόματα migrations. Αποφεύγει raw SQL string concatenation (SQL injection risk) χωρίς να προσθέτει βαριά αφαίρεση. |
 | Validation | **Zod** | Validation σε forms/API στο ίδιο σημείο που ορίζονται και οι τύποι. |
-| Auth | Custom **magic-link (passwordless)** πάνω σε Hono middleware | Βλ. §5. |
+| Auth | Custom **magic-link** πάνω σε Hono middleware + **προαιρετικός κωδικός** που ορίζει ο ίδιος ο βαθμοφόρος (hash με το ενσωματωμένο `Bun.password`, argon2id — καμία επιπλέον εξάρτηση) | Βλ. §5. |
 | Email | **Resend** (API) | Επιλέχθηκε από εσάς. Transactional emails για magic link + ειδοποιήσεις δημοσίευσης/αλλαγών. |
 | iCal | **ical-generator** (npm package) | Παράγει σωστά .ics χωρίς να γράψουμε τη μορφή με το χέρι. |
 | Map picker | **Leaflet** + OpenStreetMap tiles, vendored ως static αρχεία (`public/vendor/leaflet/`), όπως και το htmx (βλ. decisions.md) | Προαιρετική επιλογή σημείου στον χάρτη για τη Τοποθεσία δράσης. Δεν χρειάζεται API key (αντίθετα με Google Maps JS API) — ευθυγραμμίζεται με τον κανόνα "ποτέ API key στο public repo" (§10, CLAUDE.md). |
@@ -61,7 +61,7 @@ program-lofos/
 │   ├── routes/
 │   │   ├── public.ts        # δημόσιες σελίδες ανά τμήμα (χωρίς auth)
 │   │   ├── admin.ts         # πρόγραμμα/δράσεις (auth required)
-│   │   ├── auth.ts          # magic link request/verify, logout
+│   │   ├── auth.ts          # magic link request/verify, σύνδεση με κωδικό, logout
 │   │   └── ical.ts          # .ics endpoints
 │   ├── views/                # JSX components (SSR)
 │   │   ├── public/
@@ -72,10 +72,11 @@ program-lofos/
 │   │       ├── programs.tsx       # λίστα προγραμμάτων ανά τμήμα + φόρμα νέου προγράμματος
 │   │       ├── home.tsx           # πίνακας «Όλες οι δράσεις» (/admin/activities)
 │   │       ├── preview-banner.tsx # banner προεπισκόπησης πάνω από τη δημόσια σελίδα τμήματος
+│   │       ├── account.tsx        # «Ο λογαριασμός μου»: ορισμός/αλλαγή κωδικού (/admin/account, §5α)
 │   │       └── wizard/            # οθόνη προγράμματος + βηματικά components δημιουργίας/επεξεργασίας δράσης
 │   ├── emails/                # email templates (magic link, ειδοποιήσεις)
 │   ├── lib/
-│   │   ├── auth.ts            # session/cookie helpers, middleware
+│   │   ├── auth.ts            # session/cookie helpers, middleware, hashing/έλεγχος κωδικού
 │   │   ├── authorize.ts       # έλεγχος δικαιωμάτων ανά ρόλο/τμήμα
 │   │   ├── program-overview.ts # καθαρή λογική επισκόπησης: κενές Κυριακές, τρέχον/επόμενο πρόγραμμα, μήνες
 │   │   └── notify.ts          # Resend wrapper
@@ -94,11 +95,11 @@ program-lofos/
 ## 4. Data model (εννοιολογικά, θα οριστικοποιηθεί σε migration)
 
 - `sections` (τμήματα): id, τύπος (αγέλη/ομάδα/κοινότητα — σταθερά 3 rows), theme_color, logo_path
-- `leaders` (βαθμοφόροι/επιτελείο): id, όνομα, email, role (`section_leader` | `system_staff`), section_id (null αν system_staff)
+- `leaders` (βαθμοφόροι/επιτελείο): id, όνομα, email, role (`section_leader` | `system_staff`), section_id (null αν system_staff), password_hash (nullable — argon2id hash του προαιρετικού κωδικού, null = μόνο magic link· βλ. §5α)
 - `magic_links`: id, leader_id, token_hash, expires_at, used_at
-- `sessions`: id, leader_id, token_hash, expires_at, created_at, user_agent (για revocation)
+- `sessions`: id, leader_id, token_hash, expires_at, created_at, user_agent (για revocation), auth_method (`magic_link` | `password`, default `magic_link` — πώς δημιουργήθηκε το session· καθορίζει αν η αλλαγή κωδικού ζητά τον τρέχοντα, §5α)
 - `programs` (περίοδοι προγράμματος): id, section_id (null αν είναι Σύστημα-wide πρόγραμμα-container — βλ. σημείωση), period_start, period_end, status (`draft`|`published`), theme overrides (χρώμα/εικόνες), theme_title (προαιρετικός τίτλος θέματος περιόδου, π.χ. "Ο Μόγλης" — κυρίως Αγέλη, βλ. §8), published_at
-- `activities` (δράσεις): id, program_id, section_id (ή flag `is_system_wide`), type (`typical`|`day_trip`|`multi_day`|`other`|`no_activity`), location (ελεύθερο κείμενο τοποθεσίας), location_lat/location_lng (real, προαιρετικές συντεταγμένες από τον map picker — null αν δεν έχει επιλεγεί σημείο στον χάρτη, ανεξάρτητα από το αν υπάρχει κείμενο `location`· όταν υπάρχουν, εμφανίζονται δημόσια ως link Google Maps), starts_at, ends_at (ή end_date για `multi_day`), cost, `full_uniform` (boolean "Πλήρης προσκοπική στολή" — DB default false ώστε οι προϋπάρχουσες δράσεις να μην αλλάξουν· η εφαρμογή το θέτει true σε κάθε νέα δράση, false για `no_activity`· παρακολουθείται στο tracking αλλαγών με ετικέτα "Άλλαξε η στολή"), what_to_bring, created/updated timestamps, `changed_after_publish_fields` (json λίστα πεδίων που άλλαξαν μετά τη δημοσίευση, για το UI badge), `hidden_change_groups` (json λίστα από **ομάδες** ετικετών αλλαγής που το επιτελείο επέλεξε να μη φαίνονται δημόσια, purpose doc §5.4 — μία ομάδα ανά ορατή ετικέτα, π.χ. `location` καλύπτει `location`+`location_lat`+`location_lng`· βλ. `changeGroupOf`/`visibleChangeGroups` στο `src/lib/activities.ts`). Για `type = no_activity`: τα πεδία τοποθεσίας/ώρας/κόστους παραμένουν null — η εγγραφή χρησιμεύει μόνο ως marker ότι η ημερομηνία είναι "κατειλημμένη" (καμία δράση).
+- `activities` (δράσεις): id, program_id, section_id (ή flag `is_system_wide`), type (`typical`|`day_trip`|`multi_day`|`other`|`no_activity`), location (ελεύθερο κείμενο τοποθεσίας), location_lat/location_lng (real, προαιρετικές συντεταγμένες από τον map picker — null αν δεν έχει επιλεγεί σημείο στον χάρτη, ανεξάρτητα από το αν υπάρχει κείμενο `location`· όταν υπάρχουν, εμφανίζονται δημόσια ως link Google Maps), starts_at, ends_at (ή end_date για `multi_day`), cost, `full_uniform` (boolean "Πλήρης προσκοπική στολή" — DB default false ώστε οι προϋπάρχουσες δράσεις να μην αλλάξουν· η εφαρμογή το θέτει true σε κάθε νέα δράση — εκτός Κοινότητας, όπου ξεκινά false (`defaultFullUniform`) — false για `no_activity`· παρακολουθείται στο tracking αλλαγών με ετικέτα "Άλλαξε η στολή"), what_to_bring, created/updated timestamps, `changed_after_publish_fields` (json λίστα πεδίων που άλλαξαν μετά τη δημοσίευση, για το UI badge), `hidden_change_groups` (json λίστα από **ομάδες** ετικετών αλλαγής που το επιτελείο επέλεξε να μη φαίνονται δημόσια, purpose doc §5.4 — μία ομάδα ανά ορατή ετικέτα, π.χ. `location` καλύπτει `location`+`location_lat`+`location_lng`· βλ. `changeGroupOf`/`visibleChangeGroups` στο `src/lib/activities.ts`). Για `type = no_activity`: τα πεδία τοποθεσίας/ώρας/κόστους παραμένουν null — η εγγραφή χρησιμεύει μόνο ως marker ότι η ημερομηνία είναι "κατειλημμένη" (καμία δράση).
 - `activity_custom_fields`: id, activity_id, τίτλος, περιγραφή (τα "δυναμικά πεδία" του purpose doc §4 — εμφανίζονται στη δημόσια κάρτα της δράσης και στην περιγραφή του iCal event)
 - `system_notes` (Σημειώσεις Συστήματος, purpose doc §5.2α): id, program_id (πάντα σε πρόγραμμα με `section_id = null`, άρα η σημείωση ακολουθεί το draft→published εκείνου), text (plain text), date_start, date_end (εύρος ημερών, άκρα inclusive), `changed_after_publish` (boolean, για το UI badge — ισοδύναμο του `changed_after_publish_fields` των δράσεων), created/updated timestamps. Δεν συνδέεται με συγκεκριμένη δράση: το ταίριασμα γίνεται κατά το rendering, όποια δράση πέφτει μέσα στο εύρος (`notesForActivity`, `src/lib/notes.ts`) — εξαιρούνται οι δράσεις `type = no_activity`.
 - `activity_participants`: activity_id, leader_id (many-to-many, ποιοι βαθμοφόροι συμμετέχουν)
@@ -125,8 +126,8 @@ program-lofos/
 - Τρέχει αυτόματα σε κάθε εκκίνηση του server (`src/index.ts`, πριν φτιαχτεί το Hono app) — άρα κάθε `systemctl restart program-lofos` εφαρμόζει τις αλλαγές του config.
 - Μπορεί επίσης να τρέξει χειροκίνητα χωρίς restart: `bun run db:sync-leaders`.
 - **Upsert ανά email**: νέα εγγραφή στο config → νέος `leaders` row (`active: true`)· υπάρχον email → ενημερώνονται `name`/`role`/`sectionId`/`active`.
-- **Αφαίρεση από το config**: ο αντίστοιχος `leaders` row γίνεται `active: false` — δεν διαγράφεται (το χρειάζονται ως FK τα `sessions`/`magic_links`/`activity_participants`) — και διαγράφονται αμέσως όλες οι υπάρχουσες `sessions`/`magic_links` του, ώστε η ανάκληση πρόσβασης να είναι άμεση, όχι απλώς "δεν μπορεί να ξαναζητήσει link".
-- `active = false` ελέγχεται και defense-in-depth στο `auth.ts` (`findLeaderBySessionToken`, `verifyMagicLink`) και στο request-link route, ώστε ένα ήδη-εκδοθέν αλλά αχρησιμοποίητο magic link ή ένα ξεχασμένο session να μην αρκούν από μόνα τους.
+- **Αφαίρεση από το config**: ο αντίστοιχος `leaders` row γίνεται `active: false` — δεν διαγράφεται (το χρειάζονται ως FK τα `sessions`/`magic_links`/`activity_participants`) — διαγράφονται αμέσως όλες οι υπάρχουσες `sessions`/`magic_links` του και μηδενίζεται το `password_hash` (αν ξαναμπεί στο config, ξεκινά από magic link), ώστε η ανάκληση πρόσβασης να είναι άμεση, όχι απλώς "δεν μπορεί να ξαναζητήσει link".
+- `active = false` ελέγχεται και defense-in-depth στο `auth.ts` (`findSessionByToken`, `verifyMagicLink`, `verifyPasswordLogin`) και στο request-link route, ώστε ένα ήδη-εκδοθέν αλλά αχρησιμοποίητο magic link ή ένα ξεχασμένο session να μην αρκούν από μόνα τους.
 - Validation (Zod): `role: "section_leader"` απαιτεί `section`· `role: "system_staff"` δεν πρέπει να έχει `section`· διπλότυπα emails μέσα στο ίδιο config απορρίπτονται με σαφές σφάλμα (fail loud, δεν διαλέγεται σιωπηλά η τελευταία εγγραφή).
 - Δεν υποστηρίζεται partial/single-user edit μέσω CLI flags· το config file είναι πάντα η πλήρης λίστα των επιτρεπόμενων χρηστών.
 
@@ -143,6 +144,15 @@ program-lofos/
 6. Λήξη session: π.χ. 30 ημέρες, ανανεώσιμη· δυνατότητα revoke από τον admin (διαγραφή γραμμής στο `sessions`).
 
 Rate limiting στο endpoint αίτησης magic link (π.χ. max 5 αιτήματα/ώρα/email) για αποφυγή κατάχρησης του Resend quota.
+
+## 5α. Προαιρετικός κωδικός (δίπλα στο magic link)
+
+Ο βαθμοφόρος μπορεί, αφού συνδεθεί, να ορίσει δικό του κωδικό ώστε να συνδέεται με email + κωδικό χωρίς να περιμένει email. Το magic link **παραμένει πάντα διαθέσιμο** — ο κωδικός είναι επιπλέον τρόπος, όχι αντικατάσταση. Υλοποίηση: `src/lib/auth.ts` (`setLeaderPassword`, `verifyPasswordLogin`, `verifyLeaderPassword`, `destroyOtherSessions`), routes `POST /auth/login-password` και `GET /admin/account` + `POST /admin/account/password`.
+
+- **Hashing**: `Bun.password.hash(..., "argon2id")` (ενσωματωμένο στο Bun, salt ανά hash). Αποθηκεύεται μόνο το hash στο `leaders.password_hash`.
+- **Πολιτική**: 10–128 χαρακτήρες (το άνω όριο κόβει DoS μέσω τεράστιου input στο σκόπιμα αργό argon2id). Δεν γίνεται trim — τα κενά είναι έγκυροι χαρακτήρες.
+- **Login** (`POST /auth/login-password`): ίδιο γενικό μήνυμα ("Λάθος email ή κωδικός.") για άγνωστο email, ανενεργό χρήστη, χρήστη χωρίς κωδικό και λάθος κωδικό· στις περιπτώσεις χωρίς hash γίνεται dummy verify ώστε ούτε ο χρόνος απόκρισης να αποκαλύπτει ποια emails υπάρχουν. Rate limit ανά email: 10 προσπάθειες / 15 λεπτά (ξεχωριστό bucket από το magic link — ένας "κλειδωμένος" χρήστης μπορεί ακόμα να ζητήσει link). Κενός κωδικός → η φόρμα πέφτει στη ροή magic link. Το session που δημιουργείται έχει `auth_method = password`· ίδιο cookie/λήξη με §5.
+- **Ορισμός/αλλαγή** (`POST /admin/account/password`, πίσω από `requireAuth`): αφορά **μόνο** τον συνδεδεμένο βαθμοφόρο (κανένα id από το request). Session από **magic link** μπορεί να ορίσει/αλλάξει κωδικό χωρίς τον τρέχοντα — έχει ήδη αποδείξει κατοχή του email, κι έτσι λειτουργεί και το "ξέχασα τον κωδικό". Session από **κωδικό** πρέπει να δώσει τον τρέχοντα, ώστε ένα κλεμμένο password session να μη μπορεί να "κλειδώσει" μόνιμα τον λογαριασμό. Μετά από κάθε αλλαγή ανακαλούνται όλα τα **άλλα** sessions του χρήστη.
 
 ## 6. Εξουσιοδότηση (authorization)
 
@@ -190,7 +200,7 @@ Retry: αν αποτύχει η κλήση στο Resend API, log το σφάλ�
 ## 10. Ασφάλεια — checklist
 
 - **Transport**: HTTPS παντού, μέσω Caddy (auto TLS, auto-renew).
-- **Auth**: tokens (magic link + sessions) αποθηκεύονται πάντα hashed, ποτέ plaintext στη βάση· short-lived, single-use magic links· rate limiting στο request-link endpoint.
+- **Auth**: tokens (magic link + sessions) αποθηκεύονται πάντα hashed, ποτέ plaintext στη βάση· short-lived, single-use magic links· rate limiting στο request-link endpoint. Προαιρετικοί κωδικοί: argon2id hash, rate limit ανά email στο login, γενικό μήνυμα σφάλματος + dummy verify (καμία διαρροή ύπαρξης λογαριασμού), τρέχων κωδικός απαιτείται για αλλαγή από password session, ανάκληση άλλων sessions μετά από αλλαγή (§5α).
 - **Cookies**: `httpOnly` + `secure` + `sameSite=lax`, session revocable server-side.
 - **CSRF**: CSRF token σε όλες τις state-changing φόρμες/htmx requests (Hono CSRF middleware ή custom double-submit cookie).
 - **Authorization**: server-side έλεγχος ρόλου/ιδιοκτησίας τμήματος σε κάθε write route (§6) — ποτέ μόνο UI-level.

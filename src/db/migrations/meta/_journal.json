@@ -57,6 +57,13 @@
       "when": 1794826358694,
       "tag": "0007_watery_daredevil",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1794827228878,
+      "tag": "0008_awesome_psylocke",
+      "breakpoints": true
     }
   ]
 }

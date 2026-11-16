@@ -15,11 +15,19 @@ export function LoginForm({ error, linkSent, returnTo = "/" }: LoginFormProps) {
           για 15 λεπτά.
         </p>
       ) : (
-        <form method="post" action="/auth/request-link">
+        // Μία φόρμα, δύο τρόποι: το κύριο κουμπί (και το Enter) κάνει σύνδεση με κωδικό — με κενό κωδικό
+        // ο server στέλνει σύνδεσμο· το δεύτερο κουμπί στέλνει πάντα σύνδεσμο (formaction).
+        <form method="post" action="/auth/login-password">
           <label for="email">Email</label>
-          <input type="email" id="email" name="email" required autofocus />
+          <input type="email" id="email" name="email" autocomplete="username" required autofocus />
+          <label for="password">Κωδικός</label>
+          <input type="password" id="password" name="password" autocomplete="current-password" />
+          <p class="login-hint">Δεν έχεις κωδικό; Άφησέ το κενό και θα σου στείλουμε σύνδεσμο.</p>
           <input type="hidden" name="returnTo" value={returnTo} />
-          <button type="submit">Αποστολή συνδέσμου σύνδεσης</button>
+          <button type="submit">Σύνδεση</button>
+          <button type="submit" formaction="/auth/request-link" class="login-link-button">
+            Αποστολή συνδέσμου στο email
+          </button>
         </form>
       )}
     </div>
@@ -39,6 +47,8 @@ export function LoginPage({ error, linkSent, returnTo }: LoginFormProps) {
           button { width: 100%; padding: 0.75rem; font-size: 1rem; margin-top: 0.75rem; min-height: 44px; }
           .error { color: #b00020; margin-bottom: 1rem; }
           .info { margin-bottom: 1rem; }
+          label { display: block; margin-top: 0.75rem; }
+          .login-hint { font-size: 0.85rem; color: #555; margin: 0.25rem 0 0; }
         `}</style>
       </head>
       <body>

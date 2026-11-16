@@ -8,6 +8,7 @@ import {
   isTimeTbd,
   nextAvailableSundays,
   typeDefaults,
+  defaultFullUniform,
   unhideReChangedGroups,
   visibleChangeGroups,
 } from "./activities";
@@ -20,6 +21,19 @@ describe("typeDefaults", () => {
       endTime: "13:00",
       whatToBring: "παγούρι",
     });
+  });
+
+  test("typical στην Κοινότητα: χωρίς «τι να κρατάνε»", () => {
+    expect(typeDefaults("typical", "koinotita")).toEqual({ location: "Λόφος", startTime: "11:00", endTime: "13:00" });
+    expect(typeDefaults("typical", "omada").whatToBring).toBe("παγούρι");
+    expect(typeDefaults("typical", null).whatToBring).toBe("παγούρι");
+  });
+
+  test("defaultFullUniform: τσεκαρισμένο παντού εκτός Κοινότητας", () => {
+    expect(defaultFullUniform("koinotita")).toBe(false);
+    expect(defaultFullUniform("agele")).toBe(true);
+    expect(defaultFullUniform("omada")).toBe(true);
+    expect(defaultFullUniform(null)).toBe(true);
   });
 
   test("other: κανένα default (η στολή είναι πλέον ξεχωριστό checkbox)", () => {

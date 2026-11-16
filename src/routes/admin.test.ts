@@ -13,7 +13,7 @@ import {
   systemNotes,
   type Leader,
 } from "../db/schema";
-import { createSession } from "../lib/auth";
+import { createSession, setLeaderPassword } from "../lib/auth";
 import admin from "./admin";
 
 beforeAll(() => {
@@ -318,6 +318,25 @@ describe("Δημιουργία/επεξεργασία/διαγραφή δράσ�
     expect(unchecked).not.toMatch(/name="fullUniform"[^>]*checked/);
   });
 
+  test("νέα δράση στην Κοινότητα: στολή ατσέκαρτη και «Τι να κρατάνε» κενό", async () => {
+    const section = await makeSection("koinotita");
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const program = await makeProgram(section.id);
+    const cookie = await cookieFor(leader);
+
+    const page = await (await app.request(`/admin/programs/${program.id}/activities/new`, { headers: { cookie } })).text();
+    expect(page).toContain('name="fullUniform"');
+    expect(page).not.toMatch(/name="fullUniform"[^>]*checked/);
+    expect(page).toMatch(/name="whatToBring" value=""/);
+    expect(page).not.toContain("παγούρι");
+
+    const fields = await (
+      await app.request(`/admin/programs/${program.id}/activities/fields?date=2026-07-05&type=typical`, { headers: { cookie } })
+    ).text();
+    expect(fields).not.toMatch(/name="fullUniform"[^>]*checked/);
+    expect(fields).not.toContain("παγούρι");
+  });
+
   test("«Δεν έχει οριστεί ώρα»: αγνοεί τις ώρες της φόρμας και η επεξεργασία το δείχνει τσεκαρισμένο", async () => {
     const section = await makeSection("agele");
     const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
@@ -425,7 +444,7 @@ describe("Δημιουργία/επεξεργασία/διαγραφή δράσ�
   });
 
   test("quick-typical δημιουργεί Τυπική στην επόμενη διαθέσιμη Κυριακή με τα defaults", async () => {
-    const section = await makeSection("koinotita");
+    const section = await makeSection("omada");
     const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
     const program = await makeProgram(section.id);
     const cookie = await cookieFor(leader);
@@ -441,7 +460,26 @@ describe("Δημιουργία/επεξεργασία/διαγραφή δράσ�
     expect(created?.type).toBe("typical");
     expect(created?.location).toBe("Λόφος");
     expect(created?.fullUniform).toBe(true);
+    expect(created?.whatToBring).toBe("παγούρι");
     expect(created?.date.getDay()).toBe(0);
+  });
+
+  test("quick-typical στην Κοινότητα: χωρίς στολή και χωρίς «τι να κρατάνε»", async () => {
+    const section = await makeSection("koinotita");
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const program = await makeProgram(section.id);
+    const cookie = await cookieFor(leader);
+
+    const res = await app.request(`/admin/programs/${program.id}/activities/quick-typical`, {
+      method: "POST",
+      headers: { cookie },
+    });
+    expect(res.status).toBe(302);
+
+    const [created] = await db.select().from(activities).where(eq(activities.programId, program.id));
+    expect(created?.location).toBe("Λόφος");
+    expect(created?.fullUniform).toBe(false);
+    expect(created?.whatToBring).toBeNull();
   });
 
   test("quick-no-activity μαρκάρει την επόμενη Κυριακή ως Χωρίς δράση", async () => {
@@ -1605,5 +1643,109 @@ describe("Προεπισκόπηση (/admin/preview/:τμήμα)", () => {
     const staff = await makeLeader({ role: "system_staff" });
     const res = await app.request("/admin/preview/xyz", { headers: { cookie: await cookieFor(staff) } });
     expect(res.status).toBe(404);
+  });
+});
+
+describe("Λογαριασμός: ορισμός/αλλαγή κωδικού", () => {
+  const PASSWORD = "πρώτος-κωδικός-123";
+  const NEW_PASSWORD = "δεύτερος-κωδικός-456";
+
+  function postPassword(cookie: string, fields: Record<string, string>) {
+    return app.request("/admin/account/password", {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(fields),
+    });
+  }
+
+  async function passwordHashOf(leaderId: number) {
+    const [row] = await db.select().from(leaders).where(eq(leaders.id, leaderId));
+    return row!.passwordHash;
+  }
+
+  test("χωρίς session → redirect στο login", async () => {
+    const res = await app.request("/admin/account");
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/auth/login");
+  });
+
+  test("magic-link session ορίζει κωδικό χωρίς τρέχοντα", async () => {
+    const leader = await makeLeader();
+    const cookie = await cookieFor(leader);
+    const res = await postPassword(cookie, { newPassword: PASSWORD, confirmPassword: PASSWORD });
+
+    expect(res.status).toBe(302);
+    expect(res.headers.get("location")).toBe("/admin/account?saved=1");
+    expect(await Bun.password.verify(PASSWORD, (await passwordHashOf(leader.id))!)).toBe(true);
+  });
+
+  test("magic-link session αλλάζει υπάρχοντα κωδικό χωρίς τρέχοντα (ροή 'ξέχασα τον κωδικό')", async () => {
+    const leader = await makeLeader();
+    await setLeaderPassword(leader.id, PASSWORD);
+    const cookie = await cookieFor(leader);
+    const res = await postPassword(cookie, { newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
+
+    expect(res.status).toBe(302);
+    expect(await Bun.password.verify(NEW_PASSWORD, (await passwordHashOf(leader.id))!)).toBe(true);
+  });
+
+  test("password session πρέπει να δώσει τον σωστό τρέχοντα κωδικό", async () => {
+    const leader = await makeLeader();
+    await setLeaderPassword(leader.id, PASSWORD);
+    const cookie = `session=${await createSession(leader.id, null, "password")}`;
+
+    const missing = await postPassword(cookie, { newPassword: NEW_PASSWORD, confirmPassword: NEW_PASSWORD });
+    expect(missing.status).toBe(400);
+    const wrong = await postPassword(cookie, {
+      currentPassword: "λάθος-κωδικός-0",
+      newPassword: NEW_PASSWORD,
+      confirmPassword: NEW_PASSWORD,
+    });
+    expect(wrong.status).toBe(400);
+    expect(await wrong.text()).toContain("Ο τρέχων κωδικός δεν είναι σωστός.");
+    expect(await Bun.password.verify(PASSWORD, (await passwordHashOf(leader.id))!)).toBe(true);
+
+    const ok = await postPassword(cookie, {
+      currentPassword: PASSWORD,
+      newPassword: NEW_PASSWORD,
+      confirmPassword: NEW_PASSWORD,
+    });
+    expect(ok.status).toBe(302);
+    expect(await Bun.password.verify(NEW_PASSWORD, (await passwordHashOf(leader.id))!)).toBe(true);
+  });
+
+  test("απορρίπτει κωδικό μικρότερο από το ελάχιστο και κωδικούς που δεν ταιριάζουν", async () => {
+    const leader = await makeLeader();
+    const cookie = await cookieFor(leader);
+
+    const short = await postPassword(cookie, { newPassword: "κοντός", confirmPassword: "κοντός" });
+    expect(short.status).toBe(400);
+    const mismatch = await postPassword(cookie, { newPassword: PASSWORD, confirmPassword: NEW_PASSWORD });
+    expect(mismatch.status).toBe(400);
+    expect(await mismatch.text()).toContain("Οι δύο κωδικοί δεν ταιριάζουν.");
+    expect(await passwordHashOf(leader.id)).toBeNull();
+  });
+
+  test("μετά την αλλαγή ανακαλούνται τα άλλα sessions, μένει το τρέχον", async () => {
+    const leader = await makeLeader();
+    const currentToken = await createSession(leader.id, null);
+    const otherToken = await createSession(leader.id, null);
+
+    await postPassword(`session=${currentToken}`, { newPassword: PASSWORD, confirmPassword: PASSWORD });
+
+    const stillIn = await app.request("/admin/account", { headers: { cookie: `session=${currentToken}` } });
+    expect(stillIn.status).toBe(200);
+    const kickedOut = await app.request("/admin/account", { headers: { cookie: `session=${otherToken}` } });
+    expect(kickedOut.status).toBe(302);
+  });
+
+  test("αλλάζει μόνο τον κωδικό του συνδεδεμένου βαθμοφόρου (αγνοεί ξένο leaderId στο body)", async () => {
+    const leader = await makeLeader();
+    const victim = await makeLeader();
+    const cookie = await cookieFor(leader);
+    await postPassword(cookie, { leaderId: String(victim.id), newPassword: PASSWORD, confirmPassword: PASSWORD });
+
+    expect(await passwordHashOf(victim.id)).toBeNull();
+    expect(await passwordHashOf(leader.id)).not.toBeNull();
   });
 });

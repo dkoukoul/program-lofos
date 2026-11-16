@@ -20,6 +20,9 @@ export const leaders = sqliteTable("leaders", {
   // false = αφαιρέθηκε από το config/leaders.json· η πρόσβαση ανακαλείται χωρίς διαγραφή
   // της εγγραφής (τη χρειάζονται ακόμα sessions/magic_links/activity_participants ως FK).
   active: integer("active", { mode: "boolean" }).notNull().default(true),
+  // Προαιρετικός κωδικός (argon2id μέσω Bun.password) που ορίζει ο ίδιος ο βαθμοφόρος από το
+  // /admin/account — null = μόνο magic link. Μηδενίζεται όταν αφαιρεθεί από το config.
+  passwordHash: text("password_hash"),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
 });
 
@@ -41,6 +44,9 @@ export const sessions = sqliteTable("sessions", {
   expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
   createdAt: integer("created_at", { mode: "timestamp" }).notNull(),
   userAgent: text("user_agent"),
+  // Πώς δημιουργήθηκε το session: ένα magic-link session (απέδειξε κατοχή του email) μπορεί να
+  // ορίσει/αλλάξει κωδικό χωρίς τον τρέχοντα· ένα password session πρέπει να δώσει τον τρέχοντα.
+  authMethod: text("auth_method", { enum: ["magic_link", "password"] }).notNull().default("magic_link"),
 });
 
 // Περίοδος προγράμματος (π.χ. μήνας ή custom εύρος ημερομηνιών).

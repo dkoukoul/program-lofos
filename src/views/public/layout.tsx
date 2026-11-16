@@ -1,5 +1,5 @@
 import type { activities, sections, SystemNote } from "../../db/schema";
-import { changeGroupsOf, visibleChangeGroups } from "../../lib/activities";
+import { changeGroupsOf, isTimeTbd, visibleChangeGroups } from "../../lib/activities";
 import type { ActivityCustomField, DetailedActivity } from "../../lib/notes";
 import { LoginForm } from "../admin/login";
 
@@ -146,6 +146,9 @@ export function formatShortDay(date: Date): string {
   return `${shortWeekdayFormatter.format(date)} ${formatDateNumeric(date)}`;
 }
 
+/** Τι βλέπει ο επισκέπτης για δράση χωρίς ώρα ("Δεν έχει οριστεί ώρα δράσης ακόμα"). */
+export const TIME_TBD_LABEL = "Ώρα: θα ανακοινωθεί";
+
 /** Εύρος ωρών σε 24ωρη μορφή, ή null αν δεν υπάρχει ώρα έναρξης. */
 export function formatTimeRange(startsAt: Date | null, endsAt: Date | null): string | null {
   if (!startsAt) return null;
@@ -224,7 +227,9 @@ export function ActivityCard({ activity }: { activity: DetailedActivity }) {
             <span class="badge badge-changed">✏️ {label}</span>
           ))}
         </div>
-        {(activity.startsAt || activity.endsAt) && (
+        {isTimeTbd(activity) ? (
+          <p class="activity-time">🕒 {TIME_TBD_LABEL}</p>
+        ) : (
           <p class="activity-time">
             🕒 {activity.startsAt ? formatActivityTime(activity.startsAt) : "?"}
             {activity.endsAt ? ` – ${formatActivityTime(activity.endsAt)}` : ""}
@@ -305,6 +310,12 @@ type PublicLayoutProps = {
   loginStatus?: string;
   loginError?: string;
   isLoggedIn?: boolean;
+  /**
+   * Banner προεπισκόπησης του διαχειριστικού (ux-ui-guidelines §2.5). Όταν δίνεται, η σελίδα
+   * δεν είναι η δημόσια: μπαίνει noindex και κρύβεται η πλοήγηση τμημάτων (θα οδηγούσε στις
+   * δημόσιες σελίδες και θα μπέρδευε το "τι βλέπω τώρα") — την αλλαγή τμήματος την κάνει το banner.
+   */
+  previewBanner?: unknown;
   children: unknown;
 };
 
@@ -316,6 +327,7 @@ export function PublicLayout({
   loginStatus,
   loginError,
   isLoggedIn,
+  previewBanner,
   children,
 }: PublicLayoutProps) {
   const currentPath = activeSection ? `/${activeSection}` : "/";
@@ -327,11 +339,13 @@ export function PublicLayout({
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>{title}</title>
         <link rel="stylesheet" href="/public/styles.css" />
+        {previewBanner ? <meta name="robots" content="noindex, nofollow" /> : null}
         {accent && (
           <style dangerouslySetInnerHTML={{ __html: `:root { --section-accent: ${accent}; }` }} />
         )}
       </head>
-      <body class={bodyClass}>
+      <body class={previewBanner ? `${bodyClass ?? ""} is-preview` : bodyClass}>
+        {previewBanner}
         <header class="site-header">
           <a class="site-title" href="/" aria-label="Αρχική — 4ο Σύστημα Αεροπροσκόπων Ηρακλείου">
             <img
@@ -341,7 +355,7 @@ export function PublicLayout({
               aria-hidden="true"
             />
           </a>
-          <SectionNav active={activeSection} />
+          {previewBanner ? <span class="section-nav" /> : <SectionNav active={activeSection} />}
           {isLoggedIn ? (
             <a href="/admin" class="login-trigger" aria-label="Διαχείριση δράσεων" title="Διαχείριση δράσεων">
               🛠️
@@ -398,6 +412,7 @@ export function SectionSchedulePage({
   loginStatus,
   loginError,
   isLoggedIn,
+  previewBanner,
 }: {
   section: typeof sections.$inferSelect;
   program: { periodStart: Date; periodEnd: Date; themeTitle: string | null } | null;
@@ -406,6 +421,8 @@ export function SectionSchedulePage({
   loginStatus?: string;
   loginError?: string;
   isLoggedIn?: boolean;
+  /** Βλ. PublicLayout — μόνο από την προεπισκόπηση του διαχειριστικού. */
+  previewBanner?: unknown;
 }) {
   const label = SECTION_LABELS[variant.type];
 
@@ -418,6 +435,7 @@ export function SectionSchedulePage({
       loginStatus={loginStatus}
       loginError={loginError}
       isLoggedIn={isLoggedIn}
+      previewBanner={previewBanner}
     >
       <section class="hero">
         <img class="hero-logo" src={SECTION_LOGOS[variant.type]} alt="" aria-hidden="true" />
@@ -426,7 +444,9 @@ export function SectionSchedulePage({
       </section>
 
       {!program ? (
-        <p class="empty-state">Δεν υπάρχει ακόμα δημοσιευμένο πρόγραμμα για την {label}.</p>
+        <p class="empty-state">
+          Δεν υπάρχει ακόμα {previewBanner ? "" : "δημοσιευμένο "}πρόγραμμα για την {label}.
+        </p>
       ) : scheduleActivities.length === 0 ? (
         <p class="empty-state">Το πρόγραμμα δεν έχει ακόμα δράσεις.</p>
       ) : (

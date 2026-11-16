@@ -3,7 +3,15 @@ import { eq } from "drizzle-orm";
 import { migrate } from "drizzle-orm/bun-sqlite/migrator";
 import { db } from "../db/client";
 import { activities, programs, sections } from "../db/schema";
-import { getPublishedSectionActivities, mergeAndSortActivities, selectActiveProgram, selectFeaturedActivity } from "./schedule";
+import {
+  getPublishedSectionActivities,
+  limitChangeBadges,
+  mergeAndSortActivities,
+  selectActiveProgram,
+  selectChangeBadgeActivity,
+  selectFeaturedActivity,
+} from "./schedule";
+import type { DetailedActivity } from "./notes";
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -95,10 +103,65 @@ describe("selectFeaturedActivity", () => {
     expect(selectFeaturedActivity([today, later], now)).toBe(today);
   });
 
-  test("falls back to the most recent activity when all are in the past", () => {
+  test("never returns a past activity, even when all are in the past", () => {
     const older = { date: new Date(2026, 6, 1) };
     const recent = { date: new Date(2026, 6, 8) };
-    expect(selectFeaturedActivity([older, recent], now)).toBe(recent);
+    expect(selectFeaturedActivity([older, recent], now)).toBeNull();
+  });
+});
+
+describe("selectChangeBadgeActivity", () => {
+  const now = new Date(2026, 6, 15, 18, 30);
+
+  test("η επόμενη δράση σε ≤5 ημέρες δείχνει αλλαγές", () => {
+    const next = { date: new Date(2026, 6, 20) };
+    expect(selectChangeBadgeActivity([next, { date: new Date(2026, 6, 27) }], now)).toBe(next);
+  });
+
+  test("σημερινή δράση μετράει (0 ημέρες)", () => {
+    const today = { date: new Date(2026, 6, 15, 10) };
+    expect(selectChangeBadgeActivity([today], now)).toBe(today);
+  });
+
+  test("επόμενη δράση σε 6+ ημέρες δεν δείχνει αλλαγές", () => {
+    expect(selectChangeBadgeActivity([{ date: new Date(2026, 6, 21) }], now)).toBeNull();
+    expect(selectChangeBadgeActivity([{ date: new Date(2026, 7, 4) }], now)).toBeNull();
+  });
+
+  test("ποτέ δράση του παρελθόντος", () => {
+    expect(selectChangeBadgeActivity([{ date: new Date(2026, 6, 14) }], now)).toBeNull();
+  });
+});
+
+describe("limitChangeBadges", () => {
+  const now = new Date(2026, 6, 15);
+  function detailed(id: number, date: Date): DetailedActivity {
+    return {
+      id,
+      date,
+      changedAfterPublishFields: ["location"],
+      notes: [{ id: id * 10, changedAfterPublish: true }],
+    } as unknown as DetailedActivity;
+  }
+
+  test("κρατά τις αλλαγές μόνο στην επόμενη κοντινή δράση", () => {
+    const [past, next, later] = limitChangeBadges(
+      [detailed(1, new Date(2026, 6, 12)), detailed(2, new Date(2026, 6, 19)), detailed(3, new Date(2026, 6, 26))],
+      now,
+    );
+    expect(past!.changedAfterPublishFields).toEqual([]);
+    expect(past!.notes[0]!.changedAfterPublish).toBe(false);
+    expect(next!.changedAfterPublishFields).toEqual(["location"]);
+    expect(next!.notes[0]!.changedAfterPublish).toBe(true);
+    expect(later!.changedAfterPublishFields).toEqual([]);
+    expect(later!.notes[0]!.changedAfterPublish).toBe(false);
+  });
+
+  test("όταν η επόμενη απέχει >5 ημέρες καμία δεν δείχνει αλλαγές, χωρίς να πειράζει τα αρχικά", () => {
+    const original = detailed(1, new Date(2026, 6, 25));
+    const [result] = limitChangeBadges([original], now);
+    expect(result!.changedAfterPublishFields).toEqual([]);
+    expect(original.changedAfterPublishFields).toEqual(["location"]);
   });
 });
 

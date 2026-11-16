@@ -1,6 +1,6 @@
 import type { Activity, Leader, Program } from "../../../db/schema";
 import { ACTIVITY_TYPE_INFO, formatDateNumeric, googleMapsUrl } from "../../public/layout";
-import { typeDefaults, type ActivityTypeDefaults } from "../../../lib/activities";
+import { isTimeTbd, typeDefaults, type ActivityTypeDefaults } from "../../../lib/activities";
 import { AdminLayout } from "../layout";
 import { InfoTip } from "../info-tip";
 import { DateInput } from "../date-input";
@@ -106,6 +106,8 @@ export type ActivityFormValues = {
   location: string;
   locationLat: number | null;
   locationLng: number | null;
+  /** "Δεν έχει οριστεί ώρα δράσης ακόμα" — ρητή επιλογή, όχι flag στη βάση (βλ. isTimeTbd). */
+  timeTbd: boolean;
   startTime: string;
   endTime: string;
   cost: string;
@@ -124,6 +126,7 @@ export function defaultFormValues(type: ActivityType, date: Date): ActivityFormV
     location: defaults.location ?? "",
     locationLat: null,
     locationLng: null,
+    timeTbd: false,
     startTime: defaults.startTime ?? "",
     endTime: defaults.endTime ?? "",
     cost: "",
@@ -144,6 +147,7 @@ export function formValuesFromActivity(
     location: activity.location ?? "",
     locationLat: activity.locationLat,
     locationLng: activity.locationLng,
+    timeTbd: isTimeTbd(activity),
     startTime: activity.startsAt ? toTimeInputValue(activity.startsAt) : "",
     endTime: activity.endsAt ? toTimeInputValue(activity.endsAt) : "",
     cost: activity.cost ?? "",
@@ -197,21 +201,32 @@ function ActivityFields({
           <div id="location-picker-map" class="location-picker-map" hidden={values.locationLat == null}></div>
         </div>
 
-        {values.type === "multi_day" ? (
-          <>
-            <label for="startTime">Ημερομηνία έναρξης (ώρα)</label>
-            <TimeInput id="startTime" name="startTime" value={values.startTime} />
-            <label for="endTime">Ημερομηνία/ώρα λήξης</label>
-            <TimeInput id="endTime" name="endTime" value={values.endTime} />
-          </>
-        ) : (
-          <>
-            <label for="startTime">Ώρα έναρξης</label>
-            <TimeInput id="startTime" name="startTime" value={values.startTime} />
-            <label for="endTime">Ώρα λήξης</label>
-            <TimeInput id="endTime" name="endTime" value={values.endTime} />
-          </>
-        )}
+        <div class="time-fields">
+          <div class="time-tbd">
+            <label class="checkbox-option">
+              <input type="checkbox" name="timeTbd" checked={values.timeTbd} />
+              Δεν έχει οριστεί ώρα δράσης ακόμα
+            </label>
+            <InfoTip text="Τσέκαρέ το όταν η ώρα δεν έχει κλείσει ακόμα — στη δημόσια σελίδα θα φαίνεται «Ώρα: θα ανακοινωθεί». Όταν μάθεις την ώρα, ξε-τσέκαρέ το και διάλεξε ώρα· αν το πρόγραμμα είναι ήδη δημοσιευμένο, η αλλαγή θα επισημανθεί όπως κάθε αλλαγή ώρας." />
+          </div>
+          <div class="time-pickers">
+            {values.type === "multi_day" ? (
+              <>
+                <label for="startTime">Ημερομηνία έναρξης (ώρα)</label>
+                <TimeInput id="startTime" name="startTime" value={values.startTime} />
+                <label for="endTime">Ημερομηνία/ώρα λήξης</label>
+                <TimeInput id="endTime" name="endTime" value={values.endTime} />
+              </>
+            ) : (
+              <>
+                <label for="startTime">Ώρα έναρξης</label>
+                <TimeInput id="startTime" name="startTime" value={values.startTime} />
+                <label for="endTime">Ώρα λήξης</label>
+                <TimeInput id="endTime" name="endTime" value={values.endTime} />
+              </>
+            )}
+          </div>
+        </div>
       </section>
 
       <details class="wizard-step wizard-step--optional">
@@ -457,7 +472,10 @@ export function ActivityFormPage({
     : `/admin/programs/${program.id}/activities`;
 
   return (
-    <AdminLayout title={title} leader={leader} extraHead={LEAFLET_HEAD}>
+    <AdminLayout title={title} leader={leader} nav="programs" extraHead={LEAFLET_HEAD}>
+      <a class="back-link" href={`/admin/programs/${program.id}`}>
+        ← Πίσω στο πρόγραμμα
+      </a>
       <h1>{title}</h1>
       {error && <p class="error">{error}</p>}
       <ActivityFormBody
@@ -470,15 +488,13 @@ export function ActivityFormPage({
         participantsAvailable={participantsAvailable}
       />
       {editingActivityId && (
-        <form method="post" action={`/admin/programs/${program.id}/activities/${editingActivityId}/delete`}>
-          <button
-            type="submit"
-            class="icon-btn icon-btn--danger"
-            title="Διαγραφή δράσης"
-            aria-label="Διαγραφή δράσης"
-            onclick="return confirm('Διαγραφή δράσης;');"
-          >
-            🗑
+        <form
+          method="post"
+          action={`/admin/programs/${program.id}/activities/${editingActivityId}/delete`}
+          class="activity-delete-form"
+        >
+          <button type="submit" class="button button-danger" onclick="return confirm('Διαγραφή δράσης;');">
+            🗑 Διαγραφή δράσης
           </button>
         </form>
       )}

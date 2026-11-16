@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { db } from "../db/client";
 import { sections } from "../db/schema";
 import { getOptionalLeader } from "../lib/auth";
-import { getSectionSchedule } from "../lib/schedule";
+import { getPublishedSectionActivities, getSectionSchedule, limitChangeBadges, selectFeaturedActivity } from "../lib/schedule";
 import { HomePage } from "../views/public/home";
 import { AgeleSectionPage } from "../views/public/templates/agele";
 import { KoinotitaSectionPage } from "../views/public/templates/koinotita";
@@ -29,8 +29,19 @@ publicRoutes.get("/", async (c) => {
   const [allSections, leader] = await Promise.all([db.select().from(sections), getOptionalLeader(c)]);
   const blocks = await Promise.all(
     allSections.map(async (section) => {
-      const { program, activities } = await getSectionSchedule(section.id);
-      return { section, program, scheduleActivities: activities };
+      // Η "επόμενη δράση" αναζητείται σε όλα τα δημοσιευμένα προγράμματα, όχι μόνο στο
+      // ενεργό: αν οι δράσεις της τρέχουσας περιόδου έχουν περάσει, προβάλλεται η πρώτη
+      // του επόμενου προγράμματος — ποτέ δράση του παρελθόντος.
+      const [{ program, activities }, allPublished] = await Promise.all([
+        getSectionSchedule(section.id),
+        getPublishedSectionActivities(section.id),
+      ]);
+      return {
+        section,
+        program,
+        scheduleActivities: activities,
+        featuredActivity: selectFeaturedActivity(limitChangeBadges(allPublished)),
+      };
     }),
   );
 

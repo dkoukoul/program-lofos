@@ -24,6 +24,27 @@ export function typeDefaults(type: ActivityType): ActivityTypeDefaults {
   }
 }
 
+/**
+ * "Δεν έχει οριστεί ώρα δράσης ακόμα" (purpose doc §4): δεν αποθηκεύεται ως ξεχωριστό flag —
+ * είναι απλώς δράση χωρίς ώρα έναρξης ΚΑΙ χωρίς ώρα λήξης. Δημόσια προβάλλεται ως
+ * "Ώρα: θα ανακοινωθεί", ώστε να μη φαίνεται ότι η ώρα ξεχάστηκε.
+ */
+export function isTimeTbd(activity: { startsAt: Date | null; endsAt: Date | null }): boolean {
+  return !activity.startsAt && !activity.endsAt;
+}
+
+/**
+ * Το checkbox "Δεν έχει οριστεί ώρα" στο wizard υπερισχύει των ροδών ώρας: όταν είναι
+ * τσεκαρισμένο, οι ώρες που τυχόν έμειναν στα (κρυμμένα) πεδία αγνοούνται.
+ */
+export function applyTimeTbd(
+  timeTbd: boolean,
+  startTime: string,
+  endTime: string,
+): { timeTbd: boolean; startTime: string; endTime: string } {
+  return timeTbd ? { timeTbd, startTime: "", endTime: "" } : { timeTbd, startTime, endTime };
+}
+
 function isSameDay(a: Date, b: Date): boolean {
   return a.toDateString() === b.toDateString();
 }
@@ -89,7 +110,7 @@ function valuesEqual(a: unknown, b: unknown): boolean {
   return (a ?? null) === (b ?? null);
 }
 
-function newlyChangedFields(
+export function newlyChangedFields(
   before: Pick<ActivityRow, TrackedField>,
   after: Pick<ActivityRow, TrackedField>,
 ): TrackedField[] {

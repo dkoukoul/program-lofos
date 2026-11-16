@@ -4,11 +4,12 @@ import { SECTION_VARIANTS, SectionSchedulePage } from "../layout";
 
 type Props = {
   section: typeof sections.$inferSelect;
-  program: typeof programs.$inferSelect | null;
+  program: Pick<typeof programs.$inferSelect, "periodStart" | "periodEnd" | "themeTitle"> | null;
   scheduleActivities: DetailedActivity[];
   loginStatus?: string;
   loginError?: string;
   isLoggedIn?: boolean;
+  previewBanner?: unknown;
 };
 
 export function AgeleSectionPage(props: Props) {

@@ -4,7 +4,8 @@ import ical, { ICalEventBusyStatus } from "ical-generator";
 import { db } from "../db/client";
 import { sections } from "../db/schema";
 import { getPublishedSectionActivities } from "../lib/schedule";
-import { ACTIVITY_TYPE_INFO, SECTION_LABELS } from "../views/public/layout";
+import { ACTIVITY_TYPE_INFO, SECTION_LABELS, TIME_TBD_LABEL } from "../views/public/layout";
+import { isTimeTbd } from "../lib/activities";
 
 const ICS_SUFFIX = ".ics";
 const DEFAULT_DURATION_MS = 2 * 60 * 60 * 1000;
@@ -56,6 +57,7 @@ icalRoutes.get("/:sectionId/:tokenFile", async (c) => {
       : undefined;
 
     const descriptionLines = [typeInfo.label];
+    if (isTimeTbd(activity)) descriptionLines.push(TIME_TBD_LABEL);
     if (activity.isSystemWide) descriptionLines.push("Δράση Συστήματος (αφορά όλα τα τμήματα).");
     if (activity.cost) descriptionLines.push(`Κόστος: ${activity.cost}`);
     if (activity.whatToBring) descriptionLines.push(`Τι να φέρετε: ${activity.whatToBring}`);

@@ -1,6 +1,6 @@
 import type { programs, sections } from "../../db/schema";
 import type { DetailedActivity } from "../../lib/notes";
-import { selectFeaturedActivity } from "../../lib/schedule";
+import { isTimeTbd } from "../../lib/activities";
 import {
   ACTIVITY_TYPE_INFO,
   ActivityCard,
@@ -14,6 +14,7 @@ import {
   formatDateNumeric,
   formatPeriod,
   formatTimeRange,
+  TIME_TBD_LABEL,
   formatWeekday,
   googleMapsUrl,
 } from "./layout";
@@ -24,6 +25,8 @@ type SectionBlock = {
   section: typeof sections.$inferSelect;
   program: typeof programs.$inferSelect | null;
   scheduleActivities: DetailedActivity[];
+  /** Η πρώτη δημοσιευμένη δράση από σήμερα και μετά (οποιουδήποτε προγράμματος), ή null. */
+  featuredActivity: DetailedActivity | null;
 };
 
 /** Μπροστινή όψη: η τρέχουσα/επόμενη δράση με έμφαση σε ημέρα/ημερομηνία/ώρα. */
@@ -58,6 +61,7 @@ function FeaturedActivity({ activity }: { activity: DetailedActivity }) {
       <p class="card-weekday">{formatWeekday(activity.date)}</p>
       <p class="card-daymonth">{formatDateNumeric(activity.date)}</p>
       {timeRange && <p class="card-time">🕒 {timeRange}</p>}
+      {isTimeTbd(activity) && <p class="card-time">🕒 {TIME_TBD_LABEL}</p>}
       <p class="card-type">
         {typeInfo.icon} {typeInfo.label}
       </p>
@@ -91,14 +95,12 @@ function CardHeader({ type, label }: { type: SectionType; label: string }) {
 }
 
 function SectionCard({ block }: { block: SectionBlock }) {
-  const { section, program, scheduleActivities } = block;
+  const { section, program, scheduleActivities, featuredActivity: featured } = block;
   const type = section.type;
   const label = SECTION_LABELS[type];
   const accent = SECTION_VARIANTS[type].accent;
-  const featured = selectFeaturedActivity(scheduleActivities);
-
   // Χωρίς δημοσιευμένο πρόγραμμα ή χωρίς δράσεις: στατική κάρτα, δεν χρειάζεται flip.
-  if (!program || !featured) {
+  if (!program || scheduleActivities.length === 0) {
     return (
       <article class={`play-card play-card--static section-${type}`} style={`--card-accent:${accent}`}>
         <div class="play-card-face">
@@ -123,7 +125,11 @@ function SectionCard({ block }: { block: SectionBlock }) {
           <img class="card-watermark" src={SECTION_LOGOS[type]} alt="" aria-hidden="true" />
           <CardHeader type={type} label={label} />
           <div class="card-body">
-            <FeaturedActivity activity={featured} />
+            {featured ? (
+              <FeaturedActivity activity={featured} />
+            ) : (
+              <p class="empty-state">Δεν υπάρχει ακόμα προγραμματισμένη επόμενη δράση.</p>
+            )}
           </div>
           <button type="button" class="flip-btn flip-btn--primary" aria-label={`Δες το πλήρες πρόγραμμα για ${label}`}>
             Πλήρες πρόγραμμα ⟳

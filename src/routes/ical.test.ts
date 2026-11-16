@@ -169,4 +169,30 @@ describe("GET /ical/:sectionId/:tokenFile", () => {
     expect(unfolded).toContain("Στολή: Πλήρης προσκοπική");
     expect(unfolded).toContain("Σημείωση Συστήματος: Αγιασμός");
   });
+
+  test("δράση χωρίς ώρα: ολοήμερο event με «Ώρα: θα ανακοινωθεί» στην περιγραφή", async () => {
+    const koinotita = await section("koinotita");
+    const [program] = await db
+      .insert(programs)
+      .values({
+        sectionId: koinotita.id,
+        periodStart: new Date(2098, 0, 1),
+        periodEnd: new Date(2098, 0, 31),
+        status: "published",
+        createdAt: new Date(),
+      })
+      .returning();
+    await db.insert(activities).values({
+      programId: program!.id,
+      type: "day_trip",
+      date: new Date(2098, 0, 18),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const res = await app.request(`/ical/${koinotita.id}/${koinotita.icalPublicToken}.ics`);
+    const unfolded = (await res.text()).replaceAll("\r\n ", "");
+    expect(unfolded).toContain("DTSTART;VALUE=DATE:20980118");
+    expect(unfolded).toContain("Ώρα: θα ανακοινωθεί");
+  });
 });

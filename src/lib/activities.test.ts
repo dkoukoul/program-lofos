@@ -1,9 +1,11 @@
 import { describe, test, expect } from "bun:test";
 import {
+  applyTimeTbd,
   changeGroupsOf,
   checkOverlapPolicy,
   diffChangedFields,
   findOverlap,
+  isTimeTbd,
   nextAvailableSundays,
   typeDefaults,
   unhideReChangedGroups,
@@ -185,5 +187,20 @@ describe("unhideReChangedGroups", () => {
 
   test("χωρίς νέα αλλαγή, οι αποκρύψεις μένουν ως έχουν", () => {
     expect(unhideReChangedGroups(base, { ...base }, ["location"])).toEqual(["location"]);
+  });
+});
+
+describe("Δεν έχει οριστεί ώρα δράσης ακόμα", () => {
+  test("isTimeTbd: μόνο όταν λείπουν και η ώρα έναρξης και η ώρα λήξης", () => {
+    const t = new Date(2026, 6, 5, 11, 0);
+    expect(isTimeTbd({ startsAt: null, endsAt: null })).toBe(true);
+    expect(isTimeTbd({ startsAt: t, endsAt: null })).toBe(false);
+    expect(isTimeTbd({ startsAt: null, endsAt: t })).toBe(false);
+    expect(isTimeTbd({ startsAt: t, endsAt: t })).toBe(false);
+  });
+
+  test("applyTimeTbd: το checkbox υπερισχύει των ροδών ώρας", () => {
+    expect(applyTimeTbd(true, "11:00", "13:00")).toEqual({ timeTbd: true, startTime: "", endTime: "" });
+    expect(applyTimeTbd(false, "11:00", "13:00")).toEqual({ timeTbd: false, startTime: "11:00", endTime: "13:00" });
   });
 });

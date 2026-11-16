@@ -1290,6 +1290,17 @@ form.program-form {
   flex-shrink: 0;
 }
 
+/* "Δεν έχει οριστεί ώρα δράσης ακόμα": όσο είναι τσεκαρισμένο, οι ρόδες ώρας κρύβονται
+   (ο server αγνοεί ούτως ή άλλως τις τιμές τους — applyTimeTbd στο lib/activities.ts). */
+.time-tbd {
+  display: flex;
+  align-items: center;
+}
+
+.time-fields:has(input[name="timeTbd"]:checked) .time-pickers {
+  display: none;
+}
+
 .location-picker {
   display: flex;
   flex-wrap: wrap;
@@ -1799,4 +1810,528 @@ body.admin .activity-card {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
+}
+
+/* ==== Admin: επανασχεδιασμός πλοήγησης/προγραμμάτων/προεπισκόπησης (ux-ui-guidelines §2.0–§2.5) ==== */
+
+/* Σταθερή πλοήγηση κάτω από το header — tabs, όχι μενού, ώστε να φαίνεται πάντα πού είσαι. */
+.admin-nav {
+  display: flex;
+  gap: 0.35rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  max-width: 64rem;
+  margin: 1rem auto 0;
+  padding: 0 1rem;
+}
+
+.admin-nav a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  background: rgb(255 255 255 / 80%);
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.admin-nav a.active {
+  background: #fff;
+  color: var(--section-accent);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 15%);
+}
+
+body.admin main.admin-main {
+  margin-top: 0.75rem;
+}
+
+.back-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.form-label {
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.button-small {
+  min-height: 44px;
+  padding: 0.4rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+.button-danger {
+  border-color: var(--danger);
+  color: var(--danger);
+  background: #fff;
+}
+
+.button-danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.badge-current {
+  background: #dbeafe;
+  color: #1e40af;
+  font-weight: 600;
+}
+
+/* Χρώμα ανά "χώρο" — ίδια παλέτα με τις γραμμές του πίνακα και τα δημόσια themes. */
+.scope-system {
+  --scope-accent: #2563eb;
+  --scope-tint: #eff6ff;
+}
+.scope-agele {
+  --scope-accent: #eab308;
+  --scope-tint: #fefce8;
+}
+.scope-omada {
+  --scope-accent: #16a34a;
+  --scope-tint: #f0fdf4;
+}
+.scope-koinotita {
+  --scope-accent: #dc2626;
+  --scope-tint: #fef2f2;
+}
+
+/* ---- Αρχική: κάρτες ανά τμήμα ---- */
+
+.dash-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+  margin-top: 1rem;
+}
+
+@media (min-width: 768px) {
+  .dash-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.dash-card {
+  border: 1px solid var(--border);
+  border-top: 6px solid var(--scope-accent, var(--border));
+  border-radius: 0.85rem;
+  background: var(--scope-tint, var(--card-bg));
+  padding: 0.85rem 1rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.dash-card-title {
+  margin: 0;
+  font-size: 1.2rem;
+}
+
+.dash-program {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 0.65rem;
+  padding: 0.7rem 0.85rem;
+}
+
+.dash-program-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.dash-program-when {
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.dash-program-title {
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: var(--text);
+}
+
+.dash-program-stats {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.dash-program-missing {
+  margin: 0.35rem 0 0;
+  color: #92400e;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.dash-program-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.6rem;
+}
+
+.dash-suggestion {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.85rem;
+  border: 1px dashed var(--scope-accent, var(--border));
+  border-radius: 0.65rem;
+  background: rgb(255 255 255 / 60%);
+}
+
+.dash-suggestion-text {
+  flex: 1 1 12rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ---- Λίστα προγραμμάτων ανά τμήμα ---- */
+
+.programs-group {
+  margin-top: 1.25rem;
+  padding-left: 0.75rem;
+  border-left: 5px solid var(--scope-accent, var(--border));
+}
+
+.programs-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.programs-group-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.programs-group .programs-list {
+  margin-top: 0.4rem;
+}
+
+.program-card-title,
+.program-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.program-card-title {
+  flex: 1 1 auto;
+}
+
+.program-card-meta .period {
+  margin: 0;
+  font-size: 0.9rem;
+}
+
+/* ---- Οθόνη προγράμματος ---- */
+
+/* Η μπάρα κατάστασης/ενεργειών μένει ορατή κάτω από το header όσο κυλάς τη λίστα, ώστε
+   Προεπισκόπηση/Δημοσίευση να είναι πάντα ένα tap μακριά. */
+.program-toolbar {
+  position: sticky;
+  top: 4.25rem;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin: 0.75rem 0;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: rgb(255 255 255 / 95%);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 8%);
+}
+
+.program-toolbar--draft {
+  border-left: 5px solid #94a3b8;
+}
+
+.program-toolbar--published {
+  border-left: 5px solid #16a34a;
+}
+
+.program-toolbar-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem 0.6rem;
+  flex: 1 1 14rem;
+}
+
+.program-toolbar-summary {
+  font-weight: 600;
+}
+
+.program-toolbar-hint {
+  flex-basis: 100%;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.program-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.program-toolbar-actions form {
+  margin: 0;
+}
+
+.program-list-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 1rem;
+}
+
+.program-list-header h2 {
+  margin: 0;
+}
+
+.program-list-header .button {
+  margin-left: auto;
+}
+
+/* Χρονολόγιο: πάντα μία στήλη — οι κενές Κυριακές πρέπει να διαβάζονται στη σειρά. */
+.activity-list.program-timeline {
+  grid-template-columns: 1fr;
+}
+
+.activity-card {
+  scroll-margin-top: 9rem;
+}
+
+.activity-card:target {
+  outline: 3px solid var(--section-accent);
+  outline-offset: 2px;
+}
+
+.activity-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.activity-card--readonly {
+  background: #eff6ff;
+  border-style: dashed;
+}
+
+.activity-card--readonly .hint {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.activity-card--editing {
+  border-color: var(--section-accent);
+  box-shadow: 0 0 0 2px rgb(37 99 235 / 15%);
+}
+
+.quick-edit-form--card {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.quick-edit-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.quick-edit-form--card .quick-edit-actions {
+  margin-left: 0;
+}
+
+.activity-slot {
+  border: 2px dashed #f59e0b;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: #fffbeb;
+}
+
+.activity-slot--past {
+  border-color: var(--border);
+  background: var(--card-bg);
+  opacity: 0.75;
+}
+
+.activity-slot-note {
+  margin: 0 0 0.5rem;
+  color: #92400e;
+  font-size: 0.9rem;
+}
+
+.activity-slot--past .activity-slot-note {
+  color: var(--muted);
+}
+
+.activity-slot-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.activity-slot-actions form {
+  margin: 0;
+}
+
+.danger-zone {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.danger-zone summary {
+  cursor: pointer;
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.activity-delete-form {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+/* ---- Προεπισκόπηση ---- */
+
+.preview-banner {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1rem;
+  padding: 0.65rem 1rem;
+  background: #fef3c7;
+  border-bottom: 3px solid #f59e0b;
+  color: #451a03;
+  font-size: 0.9rem;
+}
+
+.preview-banner-text {
+  flex: 1 1 18rem;
+}
+
+.preview-banner-sections,
+.preview-banner-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.preview-banner-actions form {
+  margin: 0;
+}
+
+.preview-banner-sections a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid #f59e0b;
+  color: #451a03;
+  text-decoration: none;
+  background: #fff;
+}
+
+.preview-banner-sections a.active {
+  background: #f59e0b;
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Το header της δημόσιας σελίδας είναι επίσης sticky top:0 — στην προεπισκόπηση μένει από κάτω
+   από το banner ώστε να μην το καλύπτει. */
+body.is-preview .site-header {
+  position: static;
+}
+
+/* ---- «Όλες οι δράσεις»: στο κινητό ο πίνακας γίνεται κάρτες (καμία οριζόντια κύλιση, §1) ---- */
+
+@media (max-width: 767px) {
+  .home-table-wrap {
+    overflow: visible;
+    border: none;
+    box-shadow: none;
+  }
+
+  .home-table thead {
+    display: none;
+  }
+
+  .home-table,
+  .home-table tbody,
+  .home-table tr,
+  .home-table td {
+    display: block;
+    width: 100%;
+  }
+
+  .home-table tbody tr.home-row {
+    margin-bottom: 0.6rem;
+    padding: 0.55rem 0.85rem;
+    border: 1px solid var(--border);
+    border-left: 5px solid var(--row-accent, var(--border));
+    border-radius: 0.75rem;
+  }
+
+  .home-table tbody tr td,
+  .home-table tbody tr:not(:last-child) td {
+    padding: 0.15rem 0;
+    border: none;
+  }
+
+  .home-row td:first-child {
+    border-left: none;
+    font-weight: 700;
+  }
+
+  .home-table td[data-label]:not(:first-child)::before {
+    content: attr(data-label) ": ";
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+
+  .home-row-actions {
+    justify-content: flex-start;
+    padding-top: 0.4rem !important;
+  }
+}
+
+/* Στη στήλη της κάρτας το flex-basis 10rem του πεδίου τοποθεσίας (φτιαγμένο για τη γραμμή του
+   πίνακα) γινόταν ύψος — εδώ το πεδίο απλώς πιάνει όλο το πλάτος. */
+.quick-edit-form--card input[type="text"] {
+  flex: none;
+  width: 100%;
 }

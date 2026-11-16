@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import type { Context } from "hono";
 import { z } from "zod";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 import { db } from "../db/client";
 import {
   activities,
@@ -17,23 +17,41 @@ import {
   type SystemNote,
 } from "../db/schema";
 import { requireAuth } from "../lib/auth";
-import { requireProgramAccess, requireSystemStaff } from "../lib/authorize";
+import { canEditSection, requireProgramAccess, requireSystemStaff } from "../lib/authorize";
 import {
+  applyTimeTbd,
   changeGroupsOf,
   checkOverlapPolicy,
   diffChangedFields,
   findOverlap,
+  newlyChangedFields,
   nextAvailableSundays,
   typeDefaults,
   unhideReChangedGroups,
 } from "../lib/activities";
+import { logActivityChange } from "../lib/audit";
 import { attachActivityExtras, getProgramNotes } from "../lib/notes";
 import { sendProgramChangedEmail, sendProgramPublishedEmail, sendSystemNoteChangedEmail } from "../lib/notify";
-import { ActivityRow, ActivityRowEditForm, AdminHomePage, rowLabels, type HomeSortColumn, type SortDir } from "../views/admin/home";
+import {
+  buildProgramTimeline,
+  currentAndNextProgram,
+  sundayCoverage,
+  suggestMonthToCreate,
+  upcomingMonths,
+} from "../lib/program-overview";
+import { getPreviewSectionSchedule } from "../lib/schedule";
+import { AdminDashboardPage, type DashboardProgram, type DashboardScope } from "../views/admin/dashboard";
+import { ActivityRow, ActivityRowEditForm, AllActivitiesPage, rowLabels, type HomeSortColumn, type SortDir } from "../views/admin/home";
+import { PreviewBanner } from "../views/admin/preview-banner";
+import { SCOPE_ORDER, programKind, type SectionKind } from "../views/admin/program-labels";
+import { SECTION_ORDER } from "../views/public/layout";
+import { AgeleSectionPage } from "../views/public/templates/agele";
+import { KoinotitaSectionPage } from "../views/public/templates/koinotita";
+import { OmadaSectionPage } from "../views/public/templates/omada";
 import { ActivityChangeBadges } from "../views/admin/change-badges";
 import { HelpPage } from "../views/admin/help";
 import { NOTE_TEXT_MAX, SystemNoteFormPage, noteFormValues } from "../views/admin/notes";
-import { ProgramForm, ProgramsIndexPage } from "../views/admin/programs";
+import { ProgramForm, ProgramsIndexPage, type ProgramGroup } from "../views/admin/programs";
 import {
   ActivityFields,
   ActivityFormPage,
@@ -44,7 +62,14 @@ import {
   type CustomFieldValue,
 } from "../views/admin/wizard/form";
 import { OverlapWarning } from "../views/admin/wizard/overlap-warning";
-import { ProgramScreen } from "../views/admin/wizard/program-screen";
+import {
+  AdminActivityCard,
+  AdminActivityCardEditForm,
+  ProgramScreen,
+  activityCardId,
+} from "../views/admin/wizard/program-screen";
+
+type SectionType = (typeof SECTION_ORDER)[number];
 
 const admin = new Hono();
 
@@ -65,6 +90,50 @@ function combineDateTime(dateStr: string, timeStr: string): Date | null {
   const date = parseDateOnly(dateStr);
   date.setHours(hh!, mm!, 0, 0);
   return date;
+}
+
+/** Οι παλιές συντομεύσεις στέλνουν POST χωρίς σώμα — τότε `formData()` πετάει· το θεωρούμε κενή φόρμα. */
+async function optionalFormData(c: Context): Promise<FormData> {
+  try {
+    return await c.req.formData();
+  } catch {
+    return new FormData();
+  }
+}
+
+function parseDateParam(value: string | undefined | null): Date | null {
+  return value && /^\d{4}-\d{2}-\d{2}$/.test(value) ? parseDateOnly(value) : null;
+}
+
+function isWithinPeriod(program: Program, date: Date): boolean {
+  return date >= program.periodStart && date <= program.periodEnd;
+}
+
+/**
+ * Ημερομηνία για τις συντομεύσεις "+ Τυπική" / "Χωρίς δράση". Με `date` (κενή θέση της λίστας)
+ * ελέγχεται server-side ότι είναι μέσα στην περίοδο και ότι δεν υπάρχει ήδη δράση — πάντα
+ * αποκλεισμός εδώ, ανεξάρτητα από το ALLOW_ACTIVITY_OVERLAP, αφού η συντόμευση δεν έχει οθόνη
+ * προειδοποίησης. Χωρίς `date`: η επόμενη διαθέσιμη Κυριακή, όπως πριν.
+ */
+async function resolveQuickAddDate(
+  program: Program,
+  formData: FormData,
+): Promise<{ date: Date; fromSlot: boolean } | { error: string }> {
+  const candidates = await getOverlapCandidates(program);
+  const raw = str(formData, "date");
+  if (raw) {
+    const date = parseDateParam(raw);
+    if (!date || !isWithinPeriod(program, date)) return { error: "date-outside-period" };
+    if (findOverlap(candidates, date)) return { error: "date-taken" };
+    return { date, fromSlot: true };
+  }
+  const [date] = nextAvailableSundays(
+    candidates.map((a) => a.date),
+    program.periodStart,
+    program.periodEnd,
+    1,
+  );
+  return date ? { date, fromSlot: false } : { error: "no-available-sunday" };
 }
 
 /** Δράσεις που "καταλαμβάνουν" μια ημέρα για τον σκοπό του overlap check (§6 architecture doc):
@@ -164,6 +233,7 @@ type ParsedActivityForm = {
   location: string;
   locationLat: number | null;
   locationLng: number | null;
+  timeTbd: boolean;
   startTime: string;
   endTime: string;
   cost: string;
@@ -234,8 +304,7 @@ async function parseActivityForm(formData: FormData): Promise<
       location: str(formData, "location").slice(0, 200),
       locationLat: coordsParsed.data.locationLat,
       locationLng: coordsParsed.data.locationLng,
-      startTime: str(formData, "startTime"),
-      endTime: str(formData, "endTime"),
+      ...applyTimeTbd(formData.get("timeTbd") === "on", str(formData, "startTime"), str(formData, "endTime")),
       cost: str(formData, "cost").slice(0, 100),
       whatToBring: str(formData, "whatToBring").slice(0, 200),
       customFields,
@@ -265,8 +334,7 @@ function rawFormValues(formData: FormData, fallbackDate: Date): ActivityFormValu
     location: str(formData, "location").slice(0, 200),
     locationLat: Number.isFinite(lat) ? lat : null,
     locationLng: Number.isFinite(lng) ? lng : null,
-    startTime: str(formData, "startTime"),
-    endTime: str(formData, "endTime"),
+    ...applyTimeTbd(formData.get("timeTbd") === "on", str(formData, "startTime"), str(formData, "endTime")),
     cost: str(formData, "cost").slice(0, 100),
     whatToBring: str(formData, "whatToBring").slice(0, 200),
     customFields: [0, 1, 2].map((i) => ({
@@ -288,7 +356,73 @@ function isHomeSortColumn(value: string): value is HomeSortColumn {
   return (HOME_SORT_COLUMNS as readonly string[]).includes(value);
 }
 
+/** Τα προγράμματα που βλέπει ο συνδεδεμένος: το επιτελείο όλα, ο βαθμοφόρος μόνο του τμήματός του (§6). */
+async function visibleProgramsFor(leader: Leader): Promise<Program[]> {
+  return leader.role === "system_staff"
+    ? db.select().from(programs)
+    : db.select().from(programs).where(eq(programs.sectionId, leader.sectionId!));
+}
+
+/** "Χώροι" (Σύστημα/τμήματα) που βλέπει ο συνδεδεμένος, με τη σειρά του SCOPE_ORDER. */
+function visibleScopes(
+  leader: Leader,
+  allSections: (typeof sections.$inferSelect)[],
+): { kind: SectionKind; sectionId: number | null }[] {
+  return SCOPE_ORDER.flatMap((kind): { kind: SectionKind; sectionId: number | null }[] => {
+    if (kind === "system") return leader.role === "system_staff" ? [{ kind, sectionId: null }] : [];
+    const section = allSections.find((s) => s.type === kind);
+    if (!section || !canEditSection(leader, section.id)) return [];
+    return [{ kind, sectionId: section.id }];
+  });
+}
+
 admin.get("/", async (c) => {
+  const leader = c.get("leader");
+  const now = new Date();
+  const allSections = await db.select().from(sections);
+  const visiblePrograms = await visibleProgramsFor(leader);
+
+  // Οι Δράσεις Συστήματος "πιάνουν" Κυριακές και στα τμήματα (overlap/κάλυψη) — φορτώνονται
+  // και για τον βαθμοφόρο τμήματος, μόνο για μέτρηση, χωρίς να του δίνουν πρόσβαση στο πρόγραμμα.
+  const systemProgramIds = (await db.select({ id: programs.id }).from(programs).where(isNull(programs.sectionId))).map(
+    (row) => row.id,
+  );
+  const programIds = [...new Set([...visiblePrograms.map((p) => p.id), ...systemProgramIds])];
+  const relevantActivities =
+    programIds.length > 0
+      ? await db
+          .select({ programId: activities.programId, date: activities.date })
+          .from(activities)
+          .where(inArray(activities.programId, programIds))
+      : [];
+  const systemActivities = relevantActivities.filter((a) => systemProgramIds.includes(a.programId));
+
+  function summarize(program: Program | null): DashboardProgram | null {
+    if (!program) return null;
+    const own = relevantActivities.filter((a) => a.programId === program.id);
+    return {
+      program,
+      activityCount: own.length,
+      coverage: program.sectionId === null ? null : sundayCoverage([...own, ...systemActivities], program, now),
+    };
+  }
+
+  const scopes: DashboardScope[] = visibleScopes(leader, allSections).map(({ kind, sectionId }) => {
+    const scopePrograms = visiblePrograms.filter((p) => p.sectionId === sectionId);
+    const { current, next } = currentAndNextProgram(scopePrograms, now);
+    return {
+      kind,
+      sectionId,
+      current: summarize(current),
+      next: summarize(next),
+      suggestion: suggestMonthToCreate(scopePrograms, now),
+    };
+  });
+
+  return c.html(<AdminDashboardPage leader={leader} scopes={scopes} />);
+});
+
+admin.get("/activities", async (c) => {
   const leader = c.get("leader");
   const sectionFilter = c.req.query("section") ?? "all";
   const monthFilter = c.req.query("month") ?? "all";
@@ -298,14 +432,8 @@ admin.get("/", async (c) => {
   const sort: HomeSortColumn = isHomeSortColumn(sortParam) ? sortParam : "date";
   const dir: SortDir = c.req.query("dir") === "desc" ? "desc" : "asc";
 
-  const allSections = await db.select().from(sections);
-  const sectionsById = new Map(allSections.map((s) => [s.id, s]));
-
-  const visiblePrograms =
-    leader.role === "system_staff"
-      ? await db.select().from(programs)
-      : await db.select().from(programs).where(eq(programs.sectionId, leader.sectionId!));
-
+  const sectionsById = await getSectionsById();
+  const visiblePrograms = await visibleProgramsFor(leader);
   const programsById = new Map(visiblePrograms.map((p) => [p.id, p]));
   const programIds = visiblePrograms.map((p) => p.id);
 
@@ -320,7 +448,7 @@ admin.get("/", async (c) => {
   }));
 
   return c.html(
-    <AdminHomePage
+    <AllActivitiesPage
       leader={leader}
       rows={rows}
       sectionsById={sectionsById}
@@ -339,23 +467,137 @@ admin.get("/help", async (c) => {
   return c.html(<HelpPage leader={leader} />);
 });
 
-admin.get("/programs", async (c) => {
+const PREVIEW_PAGES = {
+  agele: AgeleSectionPage,
+  omada: OmadaSectionPage,
+  koinotita: KoinotitaSectionPage,
+} as const;
+
+function isSectionType(value: string): value is SectionType {
+  return (SECTION_ORDER as readonly string[]).includes(value);
+}
+
+/**
+ * Προεπισκόπηση της δημόσιας σελίδας τμήματος με τα πρόχειρα (ux-ui-guidelines §2.5).
+ * Server-side authorization (§6): ο βαθμοφόρος βλέπει μόνο το δικό του τμήμα· το `?program=`
+ * περνάει από τον ίδιο έλεγχο με το requireProgramAccess. Πρόγραμμα άλλου τμήματος από αυτό του
+ * URL → redirect στη σωστή προεπισκόπηση (αντί να δείξουμε κάτι που δεν ζητήθηκε).
+ */
+admin.get("/preview/:section", async (c) => {
   const leader = c.get("leader");
-  const programsList =
-    leader.role === "system_staff"
-      ? await db.select().from(programs)
-      : await db.select().from(programs).where(eq(programs.sectionId, leader.sectionId!));
+  const type = c.req.param("section");
+  if (!isSectionType(type)) return c.notFound();
 
   const allSections = await db.select().from(sections);
-  const sectionsById = new Map(allSections.map((s) => [s.id, s]));
+  const section = allSections.find((s) => s.type === type);
+  if (!section) return c.notFound();
+  if (!canEditSection(leader, section.id)) return c.text("Δεν έχεις δικαίωμα πρόσβασης σε αυτό το τμήμα.", 403);
 
-  return c.html(<ProgramsIndexPage leader={leader} programsList={programsList} sectionsById={sectionsById} />);
+  let focus: Program | null = null;
+  const programParam = c.req.query("program");
+  if (programParam) {
+    const [found] = await db.select().from(programs).where(eq(programs.id, Number(programParam))).limit(1);
+    if (!found) return c.notFound();
+    if (!canEditSection(leader, found.sectionId)) {
+      return c.text("Δεν έχεις δικαίωμα πρόσβασης σε αυτό το πρόγραμμα.", 403);
+    }
+    if (found.sectionId !== null && found.sectionId !== section.id) {
+      const ownType = allSections.find((s) => s.id === found.sectionId)!.type;
+      return c.redirect(`/admin/preview/${ownType}?program=${found.id}`);
+    }
+    focus = found;
+  }
+
+  const schedule = await getPreviewSectionSchedule(section.id, focus);
+  const shownProgram = schedule.program && "id" in schedule.program ? (schedule.program as Program) : null;
+  // Αλλαγή τμήματος έχει νόημα μόνο όταν δεν "κοιτάμε" συγκεκριμένο πρόγραμμα τμήματος.
+  const switchableSections =
+    focus === null || focus.sectionId === null
+      ? SECTION_ORDER.filter((t) => {
+          const s = allSections.find((row) => row.type === t);
+          return s !== undefined && canEditSection(leader, s.id);
+        })
+      : [];
+  const SectionPage = PREVIEW_PAGES[type];
+
+  return c.html(
+    <SectionPage
+      section={section}
+      program={schedule.program}
+      scheduleActivities={schedule.activities}
+      isLoggedIn
+      previewBanner={
+        <PreviewBanner
+          sectionType={type}
+          focusProgram={focus}
+          shownProgram={shownProgram}
+          switchableSections={switchableSections}
+        />
+      }
+    />,
+  );
 });
 
-admin.get("/programs/new", async (c) => {
+admin.get("/programs", async (c) => {
+  const leader = c.get("leader");
+  const now = new Date();
+  const allSections = await db.select().from(sections);
+  const visiblePrograms = await visibleProgramsFor(leader);
+  const programIds = visiblePrograms.map((p) => p.id);
+  const counts =
+    programIds.length > 0
+      ? await db
+          .select({ programId: activities.programId })
+          .from(activities)
+          .where(inArray(activities.programId, programIds))
+      : [];
+
+  const groups: ProgramGroup[] = visibleScopes(leader, allSections).map(({ kind, sectionId }) => {
+    const scopePrograms = visiblePrograms.filter((p) => p.sectionId === sectionId);
+    const { current } = currentAndNextProgram(scopePrograms, now);
+    return {
+      kind,
+      entries: scopePrograms
+        .sort((a, b) => b.periodStart.getTime() - a.periodStart.getTime())
+        .map((program) => ({
+          program,
+          activityCount: counts.filter((row) => row.programId === program.id).length,
+          isCurrent: program.id === current?.id,
+        })),
+    };
+  });
+
+  return c.html(<ProgramsIndexPage leader={leader} groups={groups} />);
+});
+
+async function programFormResponse(
+  c: Context,
+  options: { selectedSection?: string; values?: { periodStart: string; periodEnd: string }; error?: string } = {},
+  status?: 400,
+) {
   const leader = c.get("leader");
   const sectionsList = leader.role === "system_staff" ? await db.select().from(sections) : [];
-  return c.html(<ProgramForm leader={leader} sectionsList={sectionsList} />);
+  return c.html(
+    <ProgramForm
+      leader={leader}
+      sectionsList={sectionsList}
+      monthChoices={upcomingMonths(new Date(), 3)}
+      {...options}
+    />,
+    status,
+  );
+}
+
+admin.get("/programs/new", async (c) => {
+  // ?section=system|agele|omada|koinotita: προεπιλογή τμήματος όταν ερχόμαστε από τη λίστα ενός τμήματος.
+  const sectionParam = c.req.query("section");
+  let selectedSection: string | undefined;
+  if (sectionParam === "system") selectedSection = "system";
+  else if (sectionParam) {
+    const [section] = await db.select().from(sections).where(eq(sections.type, sectionParam as SectionType)).limit(1);
+    selectedSection = section ? String(section.id) : undefined;
+  }
+  return programFormResponse(c, { selectedSection });
 });
 
 const createProgramSchema = z
@@ -378,9 +620,13 @@ admin.post("/programs", async (c) => {
   });
 
   if (!parsed.success) {
-    const sectionsList = leader.role === "system_staff" ? await db.select().from(sections) : [];
-    return c.html(
-      <ProgramForm leader={leader} sectionsList={sectionsList} error="Δώσε έγκυρες ημερομηνίες περιόδου." />,
+    return programFormResponse(
+      c,
+      {
+        selectedSection: str(formData, "sectionId") || "system",
+        values: { periodStart: str(formData, "periodStart"), periodEnd: str(formData, "periodEnd") },
+        error: "Δώσε έγκυρες ημερομηνίες περιόδου (η λήξη όχι πριν την έναρξη).",
+      },
       400,
     );
   }
@@ -391,16 +637,27 @@ admin.post("/programs", async (c) => {
         ? Number(parsed.data.sectionId)
         : null
       : leader.sectionId;
+  const periodStart = parseDateOnly(parsed.data.periodStart);
+  const periodEnd = parseDateOnly(parsed.data.periodEnd);
+
+  // Ίδιο τμήμα + ακριβώς ίδια περίοδος υπάρχει ήδη (π.χ. διπλό κλικ στο "+ Δημιουργία <μήνα>"
+  // της αρχικής): ανοίγουμε το υπάρχον αντί να φτιάξουμε διπλότυπο.
+  const [duplicate] = await db
+    .select()
+    .from(programs)
+    .where(
+      and(
+        sectionId === null ? isNull(programs.sectionId) : eq(programs.sectionId, sectionId!),
+        eq(programs.periodStart, periodStart),
+        eq(programs.periodEnd, periodEnd),
+      ),
+    )
+    .limit(1);
+  if (duplicate) return c.redirect(`/admin/programs/${duplicate.id}`);
 
   const [program] = await db
     .insert(programs)
-    .values({
-      sectionId,
-      periodStart: parseDateOnly(parsed.data.periodStart),
-      periodEnd: parseDateOnly(parsed.data.periodEnd),
-      status: "draft",
-      createdAt: new Date(),
-    })
+    .values({ sectionId, periodStart, periodEnd, status: "draft", createdAt: new Date() })
     .returning();
 
   return c.redirect(`/admin/programs/${program!.id}`);
@@ -418,25 +675,56 @@ const PROGRAM_SCREEN_ERRORS: Record<string, string> = {
   "no-available-sunday": "Δεν υπάρχει άλλη διαθέσιμη Κυριακή σε αυτή την περίοδο — χρησιμοποίησε «+ Νέα δράση».",
 };
 
+const PROGRAM_SCREEN_ERRORS_EXTRA: Record<string, string> = {
+  "date-taken": "Εκείνη τη μέρα υπάρχει ήδη δράση — άνοιξέ τη για να την αλλάξεις.",
+  "date-outside-period": "Η ημερομηνία είναι εκτός της περιόδου του προγράμματος.",
+};
+
+/** Δράσεις Συστήματος μέσα στην περίοδο ενός προγράμματος τμήματος (πρόχειρες και δημοσιευμένες). */
+async function systemActivitiesInPeriod(program: Program): Promise<Activity[]> {
+  if (program.sectionId === null) return [];
+  const systemProgramIds = (
+    await db.select({ id: programs.id }).from(programs).where(isNull(programs.sectionId))
+  ).map((row) => row.id);
+  if (systemProgramIds.length === 0) return [];
+  return db
+    .select()
+    .from(activities)
+    .where(
+      and(
+        inArray(activities.programId, systemProgramIds),
+        gte(activities.date, program.periodStart),
+        lte(activities.date, program.periodEnd),
+      ),
+    );
+}
+
 /**
- * Η οθόνη προγράμματος, με τα δυναμικά πεδία και τις Σημειώσεις Συστήματος κάθε δράσης
- * γεμισμένα (`publishedOnly: false` — στο διαχειριστικό φαίνεται και ό,τι είναι ακόμα
- * πρόχειρο, ώστε ο βαθμοφόρος να βλέπει ό,τι θα δει ο επισκέπτης, ux-ui-guidelines §2.2).
+ * Η οθόνη προγράμματος (ux-ui-guidelines §2.2): χρονολόγιο με τις δράσεις του προγράμματος,
+ * τις Δράσεις Συστήματος της περιόδου (μόνο ανάγνωση) και τις κενές Κυριακές. Δυναμικά πεδία και
+ * Σημειώσεις Συστήματος γεμίζονται με `publishedOnly: false` — στο διαχειριστικό φαίνεται και ό,τι
+ * είναι ακόμα πρόχειρο, ώστε ο βαθμοφόρος να βλέπει ό,τι θα δει ο επισκέπτης.
  */
 async function programScreenResponse(c: Context, error?: string, status?: 400 | 422) {
   const leader = c.get("leader");
   const program = c.get("program");
-  const activitiesList = await attachActivityExtras(
-    await db.select().from(activities).where(eq(activities.programId, program.id)).orderBy(activities.date),
-    { publishedOnly: false },
-  );
-  const notes = program.sectionId === null ? await getProgramNotes(program.id) : [];
+  const [own, system] = await Promise.all([
+    db.select().from(activities).where(eq(activities.programId, program.id)).orderBy(activities.date),
+    systemActivitiesInPeriod(program),
+  ]);
+  const detailed = await attachActivityExtras([...own, ...system], { publishedOnly: false });
+  const ownDetailed = detailed.filter((a) => a.programId === program.id);
+  const systemDetailed = detailed.filter((a) => a.programId !== program.id);
+  const isSectionProgram = program.sectionId !== null;
+  const notes = isSectionProgram ? [] : await getProgramNotes(program.id);
 
   return c.html(
     <ProgramScreen
       leader={leader}
       program={program}
-      activitiesList={activitiesList}
+      kind={programKind(program, await getSectionsById())}
+      timeline={buildProgramTimeline(ownDetailed, systemDetailed, program, { emptySundays: isSectionProgram })}
+      coverage={isSectionProgram ? sundayCoverage([...own, ...system], program) : null}
       notes={notes}
       error={error}
     />,
@@ -446,7 +734,10 @@ async function programScreenResponse(c: Context, error?: string, status?: 400 | 
 
 admin.get("/programs/:id", async (c) => {
   const errorParam = c.req.query("error");
-  return programScreenResponse(c, errorParam ? PROGRAM_SCREEN_ERRORS[errorParam] : undefined);
+  return programScreenResponse(
+    c,
+    errorParam ? (PROGRAM_SCREEN_ERRORS[errorParam] ?? PROGRAM_SCREEN_ERRORS_EXTRA[errorParam]) : undefined,
+  );
 });
 
 admin.post("/programs/:id/delete", async (c) => {
@@ -640,7 +931,9 @@ admin.get("/programs/:id/activities/new", async (c) => {
     program.periodEnd,
     3,
   );
-  const date = chips[0] ?? program.periodStart;
+  // ?date=: ήρθαμε από το "Άλλη…" μιας κενής Κυριακής — προεπιλέγουμε εκείνη τη μέρα (αν είναι στην περίοδο).
+  const requested = parseDateParam(c.req.query("date"));
+  const date = requested && isWithinPeriod(program, requested) ? requested : (chips[0] ?? program.periodStart);
   const values = defaultFormValues("typical", date);
   const existing = findOverlap(candidates, date);
 
@@ -700,8 +993,14 @@ admin.get("/programs/:id/activities/fields", async (c) => {
     location: c.req.query("location") || defaults.location,
     locationLat: locationLatParam ? Number(locationLatParam) : null,
     locationLng: locationLngParam ? Number(locationLngParam) : null,
-    startTime: c.req.query("startTime") || defaults.startTime,
-    endTime: c.req.query("endTime") || defaults.endTime,
+    // "Δεν έχει οριστεί ώρα" επιλέχθηκε ρητά — η αλλαγή τύπου δεν το ακυρώνει με τα defaults ώρας.
+    ...(c.req.query("timeTbd") === "on"
+      ? { timeTbd: true, startTime: "", endTime: "" }
+      : {
+          timeTbd: false,
+          startTime: c.req.query("startTime") || defaults.startTime,
+          endTime: c.req.query("endTime") || defaults.endTime,
+        }),
     cost: c.req.query("cost") ?? defaults.cost,
     whatToBring: c.req.query("whatToBring") || defaults.whatToBring,
     customFields: customFields.some((f) => f.title || f.description) ? customFields : defaults.customFields,
@@ -752,6 +1051,7 @@ admin.post("/programs/:id/activities", async (c) => {
           locationLng: data.locationLng,
           startTime: data.startTime,
           endTime: data.endTime,
+          timeTbd: data.timeTbd,
           cost: data.cost,
           whatToBring: data.whatToBring,
           customFields: data.customFields,
@@ -789,6 +1089,7 @@ admin.post("/programs/:id/activities", async (c) => {
     await replaceCustomFields(activity!.id, data.customFields);
     await replaceParticipants(activity!.id, data.participantIds);
   }
+  logActivityChange({ action: "create", leader, program, activity: activity! });
 
   return c.redirect(`/admin/programs/${program.id}`);
 });
@@ -797,16 +1098,11 @@ admin.post("/programs/:id/activities", async (c) => {
 // "quick-no-activity") πρέπει να δηλωθούν πριν το γενικό "/activities/:activityId",
 // αλλιώς το Hono θα ταιριάξει πρώτα το :activityId param (θα πιάσει "quick-typical" ως id).
 admin.post("/programs/:id/activities/quick-typical", async (c) => {
+  const leader = c.get("leader");
   const program = c.get("program");
-  const candidates = await getOverlapCandidates(program);
-  const [date] = nextAvailableSundays(
-    candidates.map((a) => a.date),
-    program.periodStart,
-    program.periodEnd,
-    1,
-  );
-
-  if (!date) return c.redirect(`/admin/programs/${program.id}?error=no-available-sunday`);
+  const target = await resolveQuickAddDate(program, await optionalFormData(c));
+  if ("error" in target) return c.redirect(`/admin/programs/${program.id}?error=${target.error}`);
+  const { date, fromSlot } = target;
 
   const defaults = typeDefaults("typical");
   const [activity] = await db
@@ -824,32 +1120,39 @@ admin.post("/programs/:id/activities/quick-typical", async (c) => {
       updatedAt: new Date(),
     })
     .returning();
+  logActivityChange({ action: "quick_typical", leader, program, activity: activity! });
 
-  return c.redirect(`/admin/programs/${program.id}/activities/${activity!.id}/edit`);
+  // Από κενή θέση της λίστας: μένουμε στη λίστα (στη νέα κάρτα) ώστε να συνεχίσει με την επόμενη
+  // Κυριακή — τόπος/ώρα αλλάζουν από την ίδια την κάρτα. Χωρίς ημερομηνία (παλιά συντόμευση):
+  // ανοίγει κατευθείαν σε επεξεργασία όπως πριν.
+  return c.redirect(
+    fromSlot
+      ? `/admin/programs/${program.id}#${activityCardId(activity!.id)}`
+      : `/admin/programs/${program.id}/activities/${activity!.id}/edit`,
+  );
 });
 
 admin.post("/programs/:id/activities/quick-no-activity", async (c) => {
+  const leader = c.get("leader");
   const program = c.get("program");
-  const candidates = await getOverlapCandidates(program);
-  const [date] = nextAvailableSundays(
-    candidates.map((a) => a.date),
-    program.periodStart,
-    program.periodEnd,
-    1,
-  );
+  const target = await resolveQuickAddDate(program, await optionalFormData(c));
+  if ("error" in target) return c.redirect(`/admin/programs/${program.id}?error=${target.error}`);
+  const { date } = target;
 
-  if (!date) return c.redirect(`/admin/programs/${program.id}?error=no-available-sunday`);
+  const [activity] = await db
+    .insert(activities)
+    .values({
+      programId: program.id,
+      isSystemWide: program.sectionId === null,
+      type: "no_activity",
+      date,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    })
+    .returning();
+  logActivityChange({ action: "quick_no_activity", leader, program, activity: activity! });
 
-  await db.insert(activities).values({
-    programId: program.id,
-    isSystemWide: program.sectionId === null,
-    type: "no_activity",
-    date,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
-
-  return c.redirect(`/admin/programs/${program.id}`);
+  return c.redirect(`/admin/programs/${program.id}#${activityCardId(activity!.id)}`);
 });
 
 admin.get("/programs/:id/activities/:activityId/edit", async (c) => {
@@ -935,6 +1238,7 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
           locationLng: data.locationLng,
           startTime: data.startTime,
           endTime: data.endTime,
+          timeTbd: data.timeTbd,
           cost: data.cost,
           whatToBring: data.whatToBring,
           customFields: data.customFields,
@@ -988,6 +1292,16 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
     await replaceCustomFields(activityId, []);
     await replaceParticipants(activityId, []);
   }
+  logActivityChange({
+    action: "update",
+    leader,
+    program,
+    activity: { id: activityId, date, type: data.type },
+    changedFields: [
+      ...(before.type !== data.type ? ["type"] : []),
+      ...newlyChangedFields(before, after),
+    ],
+  });
 
   const beforeChangedCount = (before.changedAfterPublishFields ?? []).length;
   if (program.status === "published" && changedFields.length > beforeChangedCount) {
@@ -999,6 +1313,31 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
 });
 
 // ---- Γρήγορη επεξεργασία (inline, μόνο τοποθεσία/ώρα) από την αρχική σελίδα (/admin) ----
+
+/**
+ * Η γρήγορη επεξεργασία ζει σε δύο οθόνες με διαφορετικό markup: γραμμή πίνακα στο «Όλες οι
+ * δράσεις» (default) και κάρτα στην οθόνη προγράμματος (`?view=card`). Ίδια λογική αποθήκευσης.
+ */
+function isCardView(c: Context): boolean {
+  return c.req.query("view") === "card";
+}
+
+async function renderActivityCard(c: Context, activity: Activity, editing = false) {
+  const [detailed] = await attachActivityExtras([activity], { publishedOnly: false });
+  return c.html(
+    editing && activity.type !== "no_activity" ? (
+      <AdminActivityCardEditForm activity={detailed!} />
+    ) : (
+      <AdminActivityCard activity={detailed!} leader={c.get("leader")} />
+    ),
+  );
+}
+
+admin.get("/programs/:id/activities/:activityId/card", async (c) => {
+  const activity = await loadOwnActivity(c.get("program"), Number(c.req.param("activityId")));
+  if (!activity) return c.notFound();
+  return renderActivityCard(c, activity);
+});
 
 admin.get("/programs/:id/activities/:activityId/row", async (c) => {
   const program = c.get("program");
@@ -1016,6 +1355,7 @@ admin.get("/programs/:id/activities/:activityId/quick-edit", async (c) => {
   const activityId = Number(c.req.param("activityId"));
   const activity = await loadOwnActivity(program, activityId);
   if (!activity) return c.notFound();
+  if (isCardView(c)) return renderActivityCard(c, activity, true);
 
   const sectionsById = await getSectionsById();
   const row = { activity, program };
@@ -1026,6 +1366,7 @@ admin.get("/programs/:id/activities/:activityId/quick-edit", async (c) => {
 });
 
 admin.post("/programs/:id/activities/:activityId/quick-edit", async (c) => {
+  const leader = c.get("leader");
   const program = c.get("program");
   const activityId = Number(c.req.param("activityId"));
   const before = await loadOwnActivity(program, activityId);
@@ -1077,6 +1418,13 @@ admin.post("/programs/:id/activities/:activityId/quick-edit", async (c) => {
         updatedAt: new Date(),
       })
       .where(eq(activities.id, activityId));
+    logActivityChange({
+      action: "quick_edit",
+      leader,
+      program,
+      activity: before,
+      changedFields: newlyChangedFields(before, after),
+    });
 
     const beforeChangedCount = (before.changedAfterPublishFields ?? []).length;
     if (program.status === "published" && changedFields.length > beforeChangedCount) {
@@ -1086,6 +1434,7 @@ admin.post("/programs/:id/activities/:activityId/quick-edit", async (c) => {
   }
 
   const updated = (await loadOwnActivity(program, activityId))!;
+  if (isCardView(c)) return renderActivityCard(c, updated);
   const row = { activity: updated, program };
   return c.html(<ActivityRow row={row} {...rowLabels(row, sectionsById)} />);
 });
@@ -1119,17 +1468,31 @@ admin.post("/programs/:id/activities/:activityId/changes/:group/toggle", require
     .update(activities)
     .set({ hiddenChangeGroups, updatedAt: new Date() })
     .where(eq(activities.id, activityId));
+  logActivityChange({
+    action: "toggle_change_badge",
+    leader,
+    program,
+    activity,
+    detail: `${hidden.includes(group) ? "show" : "hide"}:${group}`,
+  });
 
   return c.html(<ActivityChangeBadges activity={{ ...activity, hiddenChangeGroups }} leader={leader} />);
 });
 
 admin.post("/programs/:id/activities/:activityId/delete", async (c) => {
+  const leader = c.get("leader");
   const program = c.get("program");
   const activityId = Number(c.req.param("activityId"));
 
-  await db.delete(activityCustomFields).where(eq(activityCustomFields.activityId, activityId));
-  await db.delete(activityParticipants).where(eq(activityParticipants.activityId, activityId));
-  await db.delete(activities).where(and(eq(activities.id, activityId), eq(activities.programId, program.id)));
+  // Ownership check ΠΡΙΝ από οποιοδήποτε delete: αλλιώς ένα request με το δικό μου
+  // program id και activity id άλλου τμήματος έσβηνε τα πεδία/συμμετέχοντες εκείνης.
+  const activity = await loadOwnActivity(program, activityId);
+  if (!activity) return c.notFound();
+
+  await db.delete(activityCustomFields).where(eq(activityCustomFields.activityId, activity.id));
+  await db.delete(activityParticipants).where(eq(activityParticipants.activityId, activity.id));
+  await db.delete(activities).where(eq(activities.id, activity.id));
+  logActivityChange({ action: "delete", leader, program, activity });
 
   return c.redirect(`/admin/programs/${program.id}`);
 });

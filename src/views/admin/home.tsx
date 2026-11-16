@@ -3,17 +3,11 @@ import { ACTIVITY_TYPE_INFO, SECTION_LABELS, formatDateNumeric, googleMapsUrl } 
 import { TimeInput, toTimeInputValue } from "./wizard/form";
 import { AdminLayout } from "./layout";
 import { InfoTip } from "./info-tip";
+import { STATUS_LABELS, periodTitle, type SectionKind } from "./program-labels";
 
 type SectionRow = typeof sections.$inferSelect;
-type SectionType = SectionRow["type"];
 
-/** Σε ποιο τμήμα ανήκει μια γραμμή — "system" για τα προγράμματα Συστήματος (sectionId === null). */
-export type SectionKind = "system" | SectionType;
-
-const STATUS_LABELS: Record<Program["status"], string> = {
-  draft: "Πρόχειρο",
-  published: "Δημοσιευμένο",
-};
+export type { SectionKind };
 
 export type HomeRow = { activity: Activity; program: Program };
 
@@ -92,10 +86,10 @@ export function ActivityRow({
 
   return (
     <tr id={`activity-row-${activity.id}`} class={`home-row home-row--${sectionKind}`}>
-      <td>{formatDateNumeric(activity.date)}</td>
-      <td>{sectionText}</td>
-      <td>{typeText}</td>
-      <td>
+      <td data-label="Ημερομηνία">{formatDateNumeric(activity.date)}</td>
+      <td data-label="Τμήμα">{sectionText}</td>
+      <td data-label="Τύπος">{typeText}</td>
+      <td data-label="Τοποθεσία">
         {activity.location && activity.locationLat != null && activity.locationLng != null ? (
           <a
             href={googleMapsUrl(activity.locationLat, activity.locationLng)}
@@ -109,7 +103,7 @@ export function ActivityRow({
           (activity.location ?? "—")
         )}
       </td>
-      <td>
+      <td data-label="Κατάσταση">
         <span class={`badge badge-status-${program.status}`}>{statusText}</span>
       </td>
       <td class="home-row-actions">
@@ -128,6 +122,14 @@ export function ActivityRow({
         )}
         <a class="icon-btn" title="Λεπτομέρειες & πλήρης επεξεργασία" aria-label="Λεπτομέρειες & πλήρης επεξεργασία" href={editUrl}>
           ⤢
+        </a>
+        <a
+          class="icon-btn"
+          title={`Άνοιγμα προγράμματος (${periodTitle(program)})`}
+          aria-label={`Άνοιγμα προγράμματος ${periodTitle(program)}`}
+          href={`/admin/programs/${program.id}#activity-${activity.id}`}
+        >
+          📂
         </a>
       </td>
     </tr>
@@ -152,9 +154,9 @@ export function ActivityRowEditForm({
 
   return (
     <tr id={`activity-row-${activity.id}`} class={`home-row home-row--${sectionKind} home-row--editing`}>
-      <td>{formatDateNumeric(activity.date)}</td>
-      <td>{sectionText}</td>
-      <td>{typeText}</td>
+      <td data-label="Ημερομηνία">{formatDateNumeric(activity.date)}</td>
+      <td data-label="Τμήμα">{sectionText}</td>
+      <td data-label="Τύπος">{typeText}</td>
       <td colspan={3} class="quick-edit-cell">
         <form
           class="quick-edit-form"
@@ -190,7 +192,7 @@ export function ActivityRowEditForm({
   );
 }
 
-export function AdminHomePage({
+export function AllActivitiesPage({
   leader,
   rows,
   sectionsById,
@@ -258,19 +260,18 @@ export function AdminHomePage({
       sort: column,
       dir: nextDir,
     });
-    return `/admin?${params.toString()}`;
+    return `/admin/activities?${params.toString()}`;
   }
 
   return (
-    <AdminLayout title="Αρχική" leader={leader} wide>
-      <div class="programs-header">
-        <h1>Όλες οι δράσεις</h1>
-        <a class="button" href="/admin/programs">
-          Προγράμματα
-        </a>
-      </div>
+    <AdminLayout title="Όλες οι δράσεις" leader={leader} wide nav="activities">
+      <h1>Όλες οι δράσεις</h1>
+      <p class="hint">
+        Όλες οι δράσεις όλων των προγραμμάτων σε έναν πίνακα — για αναζήτηση και γρήγορες αλλαγές. Για να δουλέψεις
+        ένα συγκεκριμένο μήνα, άνοιξέ τον από τα <a href="/admin/programs">Προγράμματα</a>.
+      </p>
 
-      <form method="get" action="/admin" class="home-filters">
+      <form method="get" action="/admin/activities" class="home-filters">
         <input type="hidden" name="sort" value={sort} />
         <input type="hidden" name="dir" value={dir} />
 
@@ -336,7 +337,7 @@ export function AdminHomePage({
         </label>
 
         {filtersActive && (
-          <a class="home-filters-reset" href="/admin">
+          <a class="home-filters-reset" href="/admin/activities">
             Καθαρισμός φίλτρων
           </a>
         )}
@@ -365,7 +366,7 @@ export function AdminHomePage({
                 ))}
                 <th class="home-table-actions-header">
                   Ενέργειες
-                  <InfoTip text="✎ Γρήγορη επεξεργασία αλλάζει μόνο τόπο/ώρα, χωρίς να φύγεις από τη σελίδα. ⤢ Λεπτομέρειες & πλήρης επεξεργασία ανοίγει το πλήρες wizard, για κάθε άλλο πεδίο." />
+                  <InfoTip text="✎ Γρήγορη επεξεργασία αλλάζει μόνο τόπο/ώρα, χωρίς να φύγεις από τη σελίδα. ⤢ Λεπτομέρειες & πλήρης επεξεργασία ανοίγει το πλήρες wizard, για κάθε άλλο πεδίο. 📂 ανοίγει το πρόγραμμα στο οποίο ανήκει η δράση." />
                 </th>
               </tr>
             </thead>

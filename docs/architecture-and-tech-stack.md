@@ -68,11 +68,16 @@ program-lofos/
 │   │   │   ├── layout.tsx    # κοινό shared layout/data contract
 │   │   │   └── templates/    # section-specific variants: agele.tsx, omada.tsx, koinotita.tsx
 │   │   └── admin/
-│   │       └── wizard/       # βηματικά JSX components δημιουργίας/επεξεργασίας δράσης
+│   │       ├── dashboard.tsx      # αρχική: κάρτα ανά τμήμα (τρέχον/επόμενο πρόγραμμα, κενές Κυριακές)
+│   │       ├── programs.tsx       # λίστα προγραμμάτων ανά τμήμα + φόρμα νέου προγράμματος
+│   │       ├── home.tsx           # πίνακας «Όλες οι δράσεις» (/admin/activities)
+│   │       ├── preview-banner.tsx # banner προεπισκόπησης πάνω από τη δημόσια σελίδα τμήματος
+│   │       └── wizard/            # οθόνη προγράμματος + βηματικά components δημιουργίας/επεξεργασίας δράσης
 │   ├── emails/                # email templates (magic link, ειδοποιήσεις)
 │   ├── lib/
 │   │   ├── auth.ts            # session/cookie helpers, middleware
 │   │   ├── authorize.ts       # έλεγχος δικαιωμάτων ανά ρόλο/τμήμα
+│   │   ├── program-overview.ts # καθαρή λογική επισκόπησης: κενές Κυριακές, τρέχον/επόμενο πρόγραμμα, μήνες
 │   │   └── notify.ts          # Resend wrapper
 │   └── index.ts               # Hono app entrypoint
 ├── config/
@@ -146,6 +151,7 @@ Middleware σε κάθε mutating route ελέγχει:
 - `section_leader` → δικαίωμα **μόνο** σε `program`/`activity` όπου `section_id` == δικό του section.
 - `hidden_change_groups` (απόκρυψη/επαναφορά ετικέτας αλλαγής) → write **μόνο** από `system_staff`, σε οποιοδήποτε πρόγραμμα (`requireSystemStaff` πάνω στο toggle route, `src/routes/admin.tsx`). Το route δέχεται μόνο ομάδα που αντιστοιχεί σε πεδίο ήδη καταγεγραμμένο στο `changed_after_publish_fields` (αλλιώς 404), ώστε ένα χειροποίητο request να μη γεμίζει τη στήλη με αυθαίρετα κλειδιά.
 - `system_notes` → write **μόνο** από `system_staff` **και μόνο** πάνω σε πρόγραμμα με `section_id = null`. Ο έλεγχος ιδιοκτησίας προγράμματος από μόνος του δεν αρκεί (θα επέτρεπε στο επιτελείο να γράψει σημείωση και σε πρόγραμμα τμήματος, όπου η έννοια δεν υπάρχει) — βλ. `denyUnlessSystemNotesAllowed` στο `src/routes/admin.tsx`.
+- **Προεπισκόπηση** (`GET /admin/preview/:τμήμα?program=`, read-only αλλά δείχνει πρόχειρο περιεχόμενο που δεν είναι δημόσιο): ίδιοι κανόνες με το read του προγράμματος — `canEditSection` για το τμήμα του URL **και** για το `?program=`. Ο `section_leader` παίρνει 403 για άλλο τμήμα και για το πρόγραμμα Συστήματος· πρόγραμμα τμήματος διαφορετικού από αυτό του URL κάνει redirect στη σωστή προεπισκόπηση αντί να αναμειχθεί. Η σελίδα στέλνει `noindex`.
 - Καμία εξαίρεση client-side μόνο· ο έλεγχος γίνεται πάντα server-side πριν από κάθε write.
 
 **Επικαλυπτόμενες δράσεις ίδιας ημέρας** (business rule, ελέγχεται στο ίδιο write-path): πριν την αποθήκευση μιας νέας δράσης, ο server ελέγχει αν υπάρχει ήδη δράση (ίδιου τμήματος, Δράση Συστήματος, ή `no_activity`) την ίδια ημερομηνία. Οι Σημειώσεις Συστήματος **δεν** συμμετέχουν σε αυτόν τον έλεγχο — δεν καταλαμβάνουν ημερομηνία. Η συμπεριφορά ρυθμίζεται από το env var `ALLOW_ACTIVITY_OVERLAP` (boolean, **default: `false`**):
@@ -210,6 +216,7 @@ Retry: αν αποτύχει η κλήση στο Resend API, log το σφάλ�
 ## 13. Logs / παρατηρησιμότητα
 
 - Απλό structured console logging (JSON lines) του Hono app → αρχείο ή systemd journal (`journalctl -u program-lofos`).
+- **Ίχνος αλλαγών δράσεων**: κάθε write σε δράση (δημιουργία, quick-add, επεξεργασία, γρήγορη επεξεργασία, απόκρυψη/επαναφορά ετικέτας αλλαγής, διαγραφή) γράφει μία JSON γραμμή `{"event":"activity_change", action, leaderId, leaderName, programId, sectionId, activityId, activityDate, activityType, changedFields?}` (`src/lib/audit.ts`). Αναζήτηση: `journalctl -u program-lofos -o cat | grep '"activity_change"'`. Μόνο id + όνομα βαθμοφόρου, ποτέ email/token. Η διάρκεια διατήρησης είναι αυτή του journal του VPS.
 - Καμία επιπλέον υποδομή (Sentry/Grafana κ.λπ.) στη Φάση 1 — μπορεί να προστεθεί αν φανεί ανάγκη.
 
 ## 14. Εκτός πεδίου Φάσης 1 / πιθανά επόμενα βήματα

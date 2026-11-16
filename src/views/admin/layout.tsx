@@ -1,10 +1,21 @@
 import type { Leader } from "../../db/schema";
 import { DATE_PLACEHOLDER } from "./date-input";
 
+/** Οι τρεις βασικές οθόνες του διαχειριστικού — η σταθερή πλοήγηση του header (ux-ui-guidelines §2.0). */
+export type AdminNavKey = "home" | "programs" | "activities";
+
+const NAV_ITEMS: { key: AdminNavKey; href: string; label: string }[] = [
+  { key: "home", href: "/admin", label: "Αρχική" },
+  { key: "programs", href: "/admin/programs", label: "Προγράμματα" },
+  { key: "activities", href: "/admin/activities", label: "Όλες οι δράσεις" },
+];
+
 type AdminLayoutProps = {
   title: string;
   leader: Leader;
   wide?: boolean;
+  /** Ποια καρτέλα της πλοήγησης είναι ενεργή — οι υπο-οθόνες (π.χ. ένα πρόγραμμα) δηλώνουν τη "γονική" τους. */
+  nav?: AdminNavKey;
   extraHead?: unknown;
   children: unknown;
 };
@@ -187,7 +198,7 @@ const DATE_INPUT_SCRIPT = `(function(){
   syncAll(document);
 })();`;
 
-export function AdminLayout({ title, leader, wide, extraHead, children }: AdminLayoutProps) {
+export function AdminLayout({ title, leader, wide, nav, extraHead, children }: AdminLayoutProps) {
   return (
     <html lang="el">
       <head>
@@ -229,6 +240,17 @@ export function AdminLayout({ title, leader, wide, extraHead, children }: AdminL
             </button>
           </form>
         </header>
+        <nav class="admin-nav" aria-label="Πλοήγηση διαχειριστικού">
+          {NAV_ITEMS.map((item) => (
+            <a
+              href={item.href}
+              class={nav === item.key ? "active" : undefined}
+              aria-current={nav === item.key ? "page" : undefined}
+            >
+              {item.label}
+            </a>
+          ))}
+        </nav>
         <main class={wide ? "admin-main admin-main--wide" : "admin-main"}>{children}</main>
         <script dangerouslySetInnerHTML={{ __html: WHEEL_TIME_SCRIPT }} />
         <script dangerouslySetInnerHTML={{ __html: DATE_INPUT_SCRIPT }} />

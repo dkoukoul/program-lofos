@@ -50,6 +50,13 @@
       "when": 1790244949798,
       "tag": "0006_sharp_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1794826358694,
+      "tag": "0007_watery_daredevil",
+      "breakpoints": true
     }
   ]
 }

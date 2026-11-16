@@ -82,6 +82,7 @@ export const CHANGE_GROUP_LABELS: Record<string, string> = {
   startsAt: "Άλλαξε η ώρα έναρξης",
   endsAt: "Άλλαξε η ώρα λήξης",
   cost: "Άλλαξε το κόστος",
+  fullUniform: "Άλλαξε η στολή",
   whatToBring: "Άλλαξε τι να κρατάνε",
 };
 
@@ -251,6 +252,7 @@ export function ActivityCard({ activity }: { activity: DetailedActivity }) {
             <p class="activity-location">📍 {activity.location}</p>
           ))}
         {activity.cost && <p class="activity-cost">💶 {activity.cost}</p>}
+        {activity.fullUniform && <p class="activity-full-uniform">🧣 Πλήρης προσκοπική στολή</p>}
         {activity.whatToBring && <p class="activity-what-to-bring">🎒 Τι να φέρετε: {activity.whatToBring}</p>}
         <ActivityCustomFields customFields={activity.customFields} />
         <ActivitySystemNotes notes={activity.notes} />

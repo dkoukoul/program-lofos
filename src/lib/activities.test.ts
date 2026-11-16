@@ -22,8 +22,8 @@ describe("typeDefaults", () => {
     });
   });
 
-  test("other: μόνο τι-να-κρατάνε", () => {
-    expect(typeDefaults("other")).toEqual({ whatToBring: "πλήρης προσκοπική στολή" });
+  test("other: κανένα default (η στολή είναι πλέον ξεχωριστό checkbox)", () => {
+    expect(typeDefaults("other")).toEqual({});
   });
 
   test("day_trip/multi_day/no_activity: κανένα default", () => {
@@ -97,6 +97,7 @@ describe("diffChangedFields", () => {
     startsAt: new Date(2026, 6, 12, 11, 0),
     endsAt: new Date(2026, 6, 12, 13, 0),
     cost: null,
+    fullUniform: true,
     whatToBring: "παγούρι",
   };
 
@@ -117,6 +118,12 @@ describe("diffChangedFields", () => {
   test("δεν διπλασιάζει αν το ίδιο πεδίο αλλάζει ξανά", () => {
     const after = { ...base, location: "Πλατεία" };
     expect(diffChangedFields(base, after, ["location"])).toEqual(["location"]);
+  });
+
+  test("εντοπίζει αλλαγή στο «Πλήρης προσκοπική στολή»", () => {
+    const after = { ...base, fullUniform: false };
+    expect(diffChangedFields(base, after)).toEqual(["fullUniform"]);
+    expect(changeGroupsOf(["fullUniform"])).toEqual(["fullUniform"]);
   });
 
   test("εντοπίζει αλλαγή συντεταγμένων ακόμα κι όταν το κείμενο τοποθεσίας μένει ίδιο", () => {
@@ -172,6 +179,7 @@ describe("unhideReChangedGroups", () => {
     startsAt: new Date(2026, 6, 12, 11, 0),
     endsAt: new Date(2026, 6, 12, 13, 0),
     cost: null,
+    fullUniform: true,
     whatToBring: "παγούρι",
   };
 

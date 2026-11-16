@@ -74,6 +74,7 @@ function activityFormBody(overrides: Record<string, string> = {}): URLSearchPara
     startTime: "11:00",
     endTime: "13:00",
     cost: "",
+    fullUniform: "on",
     whatToBring: "παγούρι",
     customFieldTitle0: "",
     customFieldDescription0: "",
@@ -217,6 +218,7 @@ describe("Δημιουργία/επεξεργασία/διαγραφή δράσ�
     const [created] = await db.select().from(activities).where(eq(activities.programId, program.id));
     expect(created?.location).toBe("Λόφος");
     expect(created?.whatToBring).toBe("παγούρι");
+    expect(created?.fullUniform).toBe(true);
 
     const editRes = await app.request(`/admin/programs/${program.id}/activities/${created!.id}`, {
       method: "POST",
@@ -260,6 +262,60 @@ describe("Δημιουργία/επεξεργασία/διαγραφή δράσ�
     expect(created?.locationLng).toBeNull();
     expect(created?.startsAt).toBeNull();
     expect(created?.whatToBring).toBeNull();
+    expect(created?.fullUniform).toBe(false);
+  });
+
+  test("«Πλήρης προσκοπική στολή»: ξε-τσεκαρισμένο αποθηκεύεται false, τσεκαρισμένο εμφανίζεται δημόσια πάνω από το «Τι να φέρετε»", async () => {
+    const section = await makeSection("agele");
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const program = await makeProgram(section.id);
+    const cookie = await cookieFor(leader);
+
+    const body = activityFormBody();
+    body.delete("fullUniform");
+    await app.request(`/admin/programs/${program.id}/activities`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body,
+    });
+    const [created] = await db.select().from(activities).where(eq(activities.programId, program.id));
+    expect(created?.fullUniform).toBe(false);
+
+    const editPage = await (
+      await app.request(`/admin/programs/${program.id}/activities/${created!.id}/edit`, { headers: { cookie } })
+    ).text();
+    expect(editPage).toContain('name="fullUniform"');
+    expect(editPage).not.toMatch(/name="fullUniform"[^>]*checked/);
+
+    let preview = await (await app.request(`/admin/preview/${section.type}?program=${program.id}`, { headers: { cookie } })).text();
+    expect(preview).not.toContain("Πλήρης προσκοπική στολή");
+
+    await app.request(`/admin/programs/${program.id}/activities/${created!.id}`, {
+      method: "POST",
+      headers: { cookie, "content-type": "application/x-www-form-urlencoded" },
+      body: activityFormBody(),
+    });
+    preview = await (await app.request(`/admin/preview/${section.type}?program=${program.id}`, { headers: { cookie } })).text();
+    const uniformAt = preview.indexOf("Πλήρης προσκοπική στολή");
+    expect(uniformAt).toBeGreaterThan(-1);
+    expect(uniformAt).toBeLessThan(preview.indexOf("Τι να φέρετε"));
+  });
+
+  test("νέα δράση: «Πλήρης προσκοπική στολή» προεπιλεγμένο, και η αλλαγή τύπου σέβεται το ξε-τσεκάρισμα", async () => {
+    const section = await makeSection("omada");
+    const leader = await makeLeader({ role: "section_leader", sectionId: section.id });
+    const program = await makeProgram(section.id);
+    const cookie = await cookieFor(leader);
+    const fieldsUrl = `/admin/programs/${program.id}/activities/fields?date=2026-07-05`;
+
+    const fresh = await (await app.request(`${fieldsUrl}&type=other`, { headers: { cookie } })).text();
+    expect(fresh).toMatch(/name="fullUniform"[^>]*checked/);
+
+    const unchecked = await (
+      await app.request(`${fieldsUrl}&type=day_trip&fullUniformShown=1`, { headers: { cookie } })
+    ).text();
+    expect(unchecked).toContain('name="fullUniform"');
+    expect(unchecked).not.toMatch(/name="fullUniform"[^>]*checked/);
   });
 
   test("«Δεν έχει οριστεί ώρα»: αγνοεί τις ώρες της φόρμας και η επεξεργασία το δείχνει τσεκαρισμένο", async () => {
@@ -384,6 +440,7 @@ describe("Δημιουργία/επεξεργασία/διαγραφή δράσ�
     const [created] = await db.select().from(activities).where(eq(activities.programId, program.id));
     expect(created?.type).toBe("typical");
     expect(created?.location).toBe("Λόφος");
+    expect(created?.fullUniform).toBe(true);
     expect(created?.date.getDay()).toBe(0);
   });
 

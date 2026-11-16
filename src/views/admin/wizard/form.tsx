@@ -111,6 +111,8 @@ export type ActivityFormValues = {
   startTime: string;
   endTime: string;
   cost: string;
+  /** "Πλήρης προσκοπική στολή" — προεπιλεγμένο σε κάθε νέα δράση. */
+  fullUniform: boolean;
   whatToBring: string;
   customFields: CustomFieldValue[];
   participantIds: number[];
@@ -130,6 +132,7 @@ export function defaultFormValues(type: ActivityType, date: Date): ActivityFormV
     startTime: defaults.startTime ?? "",
     endTime: defaults.endTime ?? "",
     cost: "",
+    fullUniform: true,
     whatToBring: defaults.whatToBring ?? "",
     customFields: EMPTY_CUSTOM_FIELDS,
     participantIds: [],
@@ -151,6 +154,7 @@ export function formValuesFromActivity(
     startTime: activity.startsAt ? toTimeInputValue(activity.startsAt) : "",
     endTime: activity.endsAt ? toTimeInputValue(activity.endsAt) : "",
     cost: activity.cost ?? "",
+    fullUniform: activity.fullUniform,
     whatToBring: activity.whatToBring ?? "",
     customFields:
       customFields.length > 0
@@ -226,6 +230,17 @@ function ActivityFields({
               </>
             )}
           </div>
+        </div>
+
+        <div class="full-uniform">
+          {/* Marker ότι το checkbox υπήρχε στη φόρμα: όταν αλλάζει ο τύπος (hx-get με όλη τη φόρμα),
+              ξεχωρίζει το "ο χρήστης το ξε-τσέκαρε" από το "ερχόμαστε από «Χωρίς δράση»" (→ default ναι). */}
+          <input type="hidden" name="fullUniformShown" value="1" />
+          <label class="checkbox-option">
+            <input type="checkbox" name="fullUniform" checked={values.fullUniform} />
+            Πλήρης προσκοπική στολή
+          </label>
+          <InfoTip text="Προεπιλεγμένο σε κάθε νέα δράση. Όταν είναι τσεκαρισμένο, στη δημόσια σελίδα εμφανίζεται «Πλήρης προσκοπική στολή» πάνω από το «Τι να φέρετε». Ξε-τσέκαρέ το αν τα παιδιά δεν χρειάζεται να έρθουν με στολή." />
         </div>
       </section>
 

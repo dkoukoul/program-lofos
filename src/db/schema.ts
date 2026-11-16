@@ -79,6 +79,9 @@ export const activities = sqliteTable("activities", {
   startsAt: integer("starts_at", { mode: "timestamp" }),
   endsAt: integer("ends_at", { mode: "timestamp" }),
   cost: text("cost"),
+  // "Πλήρης προσκοπική στολή" — checkbox στο wizard, προεπιλεγμένο για κάθε νέα δράση (purpose doc §4).
+  // Default false στη βάση ώστε οι ήδη υπάρχουσες δράσεις να μην αποκτήσουν ξαφνικά απαίτηση στολής.
+  fullUniform: integer("full_uniform", { mode: "boolean" }).notNull().default(false),
   whatToBring: text("what_to_bring"),
   changedAfterPublishFields: text("changed_after_publish_fields", { mode: "json" }).$type<string[]>(),
   // Ομάδες ετικετών αλλαγής (π.χ. "location", "startsAt") που το επιτελείο επέλεξε να ΜΗΝ

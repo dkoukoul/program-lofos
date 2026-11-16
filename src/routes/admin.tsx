@@ -237,6 +237,7 @@ type ParsedActivityForm = {
   startTime: string;
   endTime: string;
   cost: string;
+  fullUniform: boolean;
   whatToBring: string;
   customFields: CustomFieldValue[];
   participantIds: number[];
@@ -306,6 +307,7 @@ async function parseActivityForm(formData: FormData): Promise<
       locationLng: coordsParsed.data.locationLng,
       ...applyTimeTbd(formData.get("timeTbd") === "on", str(formData, "startTime"), str(formData, "endTime")),
       cost: str(formData, "cost").slice(0, 100),
+      fullUniform: formData.get("fullUniform") === "on",
       whatToBring: str(formData, "whatToBring").slice(0, 200),
       customFields,
       participantIds,
@@ -336,6 +338,7 @@ function rawFormValues(formData: FormData, fallbackDate: Date): ActivityFormValu
     locationLng: Number.isFinite(lng) ? lng : null,
     ...applyTimeTbd(formData.get("timeTbd") === "on", str(formData, "startTime"), str(formData, "endTime")),
     cost: str(formData, "cost").slice(0, 100),
+    fullUniform: formData.get("fullUniform") === "on",
     whatToBring: str(formData, "whatToBring").slice(0, 200),
     customFields: [0, 1, 2].map((i) => ({
       title: str(formData, `customFieldTitle${i}`).slice(0, 100),
@@ -1002,6 +1005,9 @@ admin.get("/programs/:id/activities/fields", async (c) => {
           endTime: c.req.query("endTime") || defaults.endTime,
         }),
     cost: c.req.query("cost") ?? defaults.cost,
+    // Μόνο αν το checkbox υπήρχε ήδη στη φόρμα σεβόμαστε την τιμή του (unchecked = δεν στέλνεται)·
+    // αλλιώς (π.χ. από «Χωρίς δράση») ισχύει το default της νέας δράσης.
+    fullUniform: c.req.query("fullUniformShown") ? c.req.query("fullUniform") === "on" : defaults.fullUniform,
     whatToBring: c.req.query("whatToBring") || defaults.whatToBring,
     customFields: customFields.some((f) => f.title || f.description) ? customFields : defaults.customFields,
     participantIds: participantIds.length > 0 ? participantIds : defaults.participantIds,
@@ -1053,6 +1059,7 @@ admin.post("/programs/:id/activities", async (c) => {
           endTime: data.endTime,
           timeTbd: data.timeTbd,
           cost: data.cost,
+          fullUniform: data.fullUniform,
           whatToBring: data.whatToBring,
           customFields: data.customFields,
           participantIds: data.participantIds,
@@ -1079,6 +1086,7 @@ admin.post("/programs/:id/activities", async (c) => {
       startsAt: data.type === "no_activity" ? null : combineDateTime(data.date, data.startTime),
       endsAt: data.type === "no_activity" ? null : combineDateTime(data.date, data.endTime),
       cost: data.type === "no_activity" ? null : data.cost || null,
+      fullUniform: data.type !== "no_activity" && data.fullUniform,
       whatToBring: data.type === "no_activity" ? null : data.whatToBring || null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -1115,6 +1123,7 @@ admin.post("/programs/:id/activities/quick-typical", async (c) => {
       location: defaults.location ?? null,
       startsAt: defaults.startTime ? combineDateTime(toDateInputValue(date), defaults.startTime) : null,
       endsAt: defaults.endTime ? combineDateTime(toDateInputValue(date), defaults.endTime) : null,
+      fullUniform: true,
       whatToBring: defaults.whatToBring ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -1240,6 +1249,7 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
           endTime: data.endTime,
           timeTbd: data.timeTbd,
           cost: data.cost,
+          fullUniform: data.fullUniform,
           whatToBring: data.whatToBring,
           customFields: data.customFields,
           participantIds: data.participantIds,
@@ -1262,6 +1272,7 @@ admin.post("/programs/:id/activities/:activityId", async (c) => {
     startsAt: data.type === "no_activity" ? null : combineDateTime(data.date, data.startTime),
     endsAt: data.type === "no_activity" ? null : combineDateTime(data.date, data.endTime),
     cost: data.type === "no_activity" ? null : data.cost || null,
+    fullUniform: data.type !== "no_activity" && data.fullUniform,
     whatToBring: data.type === "no_activity" ? null : data.whatToBring || null,
   };
 
@@ -1393,6 +1404,7 @@ admin.post("/programs/:id/activities/:activityId/quick-edit", async (c) => {
       startsAt: combineDateTime(dateStr, startTime),
       endsAt: combineDateTime(dateStr, endTime),
       cost: before.cost,
+      fullUniform: before.fullUniform,
       whatToBring: before.whatToBring,
     };
 

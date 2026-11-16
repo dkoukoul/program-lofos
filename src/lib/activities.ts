@@ -17,8 +17,6 @@ export function typeDefaults(type: ActivityType): ActivityTypeDefaults {
   switch (type) {
     case "typical":
       return { location: "Λόφος", startTime: "11:00", endTime: "13:00", whatToBring: "παγούρι" };
-    case "other":
-      return { whatToBring: "πλήρης προσκοπική στολή" };
     default:
       return {};
   }
@@ -101,6 +99,7 @@ const TRACKED_FIELDS = [
   "startsAt",
   "endsAt",
   "cost",
+  "fullUniform",
   "whatToBring",
 ] as const;
 type TrackedField = (typeof TRACKED_FIELDS)[number];
@@ -144,6 +143,7 @@ const CHANGE_GROUP_BY_FIELD: Record<string, string> = {
   startsAt: "startsAt",
   endsAt: "endsAt",
   cost: "cost",
+  fullUniform: "fullUniform",
   whatToBring: "whatToBring",
 };
 

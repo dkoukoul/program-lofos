@@ -135,6 +135,7 @@ describe("GET /ical/:sectionId/:tokenFile", () => {
         type: "typical",
         date: new Date(2097, 0, 18),
         startsAt: new Date(2097, 0, 18, 11, 0),
+        fullUniform: true,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
@@ -168,6 +169,7 @@ describe("GET /ical/:sectionId/:tokenFile", () => {
     const unfolded = body.replaceAll("\r\n ", "");
     expect(unfolded).toContain("Στολή: Πλήρης προσκοπική");
     expect(unfolded).toContain("Σημείωση Συστήματος: Αγιασμός");
+    expect(unfolded).toContain("Πλήρης προσκοπική στολή");
   });
 
   test("δράση χωρίς ώρα: ολοήμερο event με «Ώρα: θα ανακοινωθεί» στην περιγραφή", async () => {

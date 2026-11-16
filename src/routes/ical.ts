@@ -60,6 +60,7 @@ icalRoutes.get("/:sectionId/:tokenFile", async (c) => {
     if (isTimeTbd(activity)) descriptionLines.push(TIME_TBD_LABEL);
     if (activity.isSystemWide) descriptionLines.push("Δράση Συστήματος (αφορά όλα τα τμήματα).");
     if (activity.cost) descriptionLines.push(`Κόστος: ${activity.cost}`);
+    if (activity.fullUniform) descriptionLines.push("Πλήρης προσκοπική στολή");
     if (activity.whatToBring) descriptionLines.push(`Τι να φέρετε: ${activity.whatToBring}`);
     for (const field of activity.customFields) {
       const line = [field.title, field.description].filter((part) => part !== "").join(": ");

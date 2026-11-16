@@ -1,0 +1,1 @@
+ALTER TABLE `activities` ADD `full_uniform` integer DEFAULT false NOT NULL;

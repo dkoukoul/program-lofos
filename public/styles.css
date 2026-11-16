@@ -690,6 +690,7 @@ body.home main::before {
 .activity-time,
 .activity-location,
 .activity-cost,
+.activity-full-uniform,
 .activity-what-to-bring {
   margin: 0.15rem 0;
 }
@@ -1292,7 +1293,8 @@ form.program-form {
 
 /* "Δεν έχει οριστεί ώρα δράσης ακόμα": όσο είναι τσεκαρισμένο, οι ρόδες ώρας κρύβονται
    (ο server αγνοεί ούτως ή άλλως τις τιμές τους — applyTimeTbd στο lib/activities.ts). */
-.time-tbd {
+.time-tbd,
+.full-uniform {
   display: flex;
   align-items: center;
 }
